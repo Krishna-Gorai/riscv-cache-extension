@@ -29,8 +29,6 @@ sim/logs/
 
 # ---- software build ----
 sw/build/*
-!sw/build/
-!sw/build/*.hex
 *.o
 *.elf
 *.bin
@@ -43,3 +41,8 @@ sw/build/*
 __pycache__/
 *.pyc
 .venv/
+
+# ...but keep the tiny prebuilt program images, so the simulations run
+# without a RISC-V toolchain installed. Must come last: the generic *.hex
+# rule above would otherwise win.
+!sw/build/*.hex
