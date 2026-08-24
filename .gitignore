@@ -1,0 +1,43 @@
+# ---- Vivado ----
+*.jou
+*.log
+*.str
+*.pb
+*.wdb
+*.wcfg
+*.backup.*
+.Xil/
+xsim.dir/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.sim/
+*.runs/
+*.gen/
+*.srcs/
+vivado_prj/
+webtalk*
+
+# ---- simulation output ----
+*.vcd
+*.fst
+*.out
+*.vvp
+work/
+sim/out/
+sim/logs/
+
+# ---- software build ----
+sw/build/
+*.o
+*.elf
+*.bin
+*.hex
+*.coe
+*.dis
+*.map
+
+# ---- misc ----
+__pycache__/
+*.pyc
+.venv/
