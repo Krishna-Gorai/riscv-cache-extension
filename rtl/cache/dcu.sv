@@ -75,6 +75,14 @@ module dcu
   input  logic                  snp_gnt_i,
   input  logic                  snp_excl_ok_i,  // SC: reservation still held
 
+  // Write-through still in flight towards the shared memory. The snoopy bus
+  // holds the MRSW lock on this line until the write has actually landed:
+  // granting the INV REQ alone is not enough, because a remote read granted in
+  // between would fetch the pre-write value from memory and cache it, and no
+  // further invalidation would ever be sent for it.
+  output logic                  snp_wr_busy_o,
+  output logic [AddrW-1:0]      snp_wr_addr_o,
+
   input  logic                  snp_inv_valid_i,
   input  logic [AddrW-1:0]      snp_inv_addr_i,
   output logic                  snp_inv_ready_o,
@@ -181,22 +189,37 @@ module dcu
   logic s1_ready, s1_advance, s1_snoop_ok;
   logic s2_ready, s2_done;
 
-  // --- Request Management: the snoopy bus outranks the local core so that an
-  //     invalidation broadcast is never held off by local traffic.
-  logic             take_snoop, take_core;
-  req_e             s1_req_d;
-  logic [AddrW-1:0] s1_addr_d;
+  // --- Request Management ----------------------------------------------------
+  //  The snoopy bus outranks the local core, and an incoming INV REQ may also
+  //  *preempt* a core request that is still waiting for its own snoopy bus
+  //  grant. Without that, a core stalled on a grant could never accept the
+  //  broadcast, while the bus withholds the grant until the broadcast is
+  //  accepted -- the two would deadlock. This is the hardware reading of the
+  //  stage-1 stall condition "the INV REQ is not granted before the READ REQ":
+  //  a local request that the bus has not acknowledged yet has had no effect
+  //  anywhere, so it can be set aside in a holding slot and re-presented.
+  //
+  //  snp_inv_ready_o is deliberately a function of registered state only. It
+  //  must not depend on snp_gnt_i, because the bus qualifies its grant with the
+  //  readiness of every other DCU -- a combinational path from grant to ready
+  //  would close a loop across the cluster.
+  logic                 hold_valid_q;
+  req_e                 hold_req_q;
+  logic [AddrW-1:0]     hold_addr_q;
+  logic [DataW-1:0]     hold_wdata_q;
+  logic [WordBytes-1:0] hold_be_q;
+  amo_e                 hold_amo_q;
 
-  assign take_snoop = snp_inv_valid_i;
-  assign take_core  = core_req_i && !take_snoop;
+  logic take_snoop, take_hold, take_core, do_preempt;
 
-  assign s1_req_d  = take_snoop ? REQ_INV
-                   : take_core  ? (core_we_i ? REQ_WRITE : REQ_READ)
-                   :              REQ_NONE;
-  assign s1_addr_d = take_snoop ? snp_inv_addr_i : core_addr_i;
+  assign snp_inv_ready_o = !s1_valid_q || ((s1_req_q != REQ_INV) && !hold_valid_q);
 
-  assign core_gnt_o      = take_core && s1_ready;
-  assign snp_inv_ready_o = s1_ready;
+  assign take_snoop = snp_inv_valid_i && snp_inv_ready_o;
+  assign take_hold  = !take_snoop && hold_valid_q && s1_ready;
+  assign take_core  = !take_snoop && !hold_valid_q && core_req_i && s1_ready;
+  assign do_preempt = take_snoop && s1_valid_q && !s1_advance;
+
+  assign core_gnt_o = take_core;
 
   // --- Snoopy bus forwarding (stage 1). A core READ REQ is forwarded so the
   //     bus can screen it against the Invalidation Table and allocate the Link
@@ -220,19 +243,53 @@ module dcu
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      s1_valid_q <= 1'b0;
-      s1_req_q   <= REQ_NONE;
-      s1_addr_q  <= '0;
-      s1_wdata_q <= '0;
-      s1_be_q    <= '0;
-      s1_amo_q   <= AMO_NONE;
-    end else if (s1_ready) begin
-      s1_valid_q <= (s1_req_d != REQ_NONE);
-      s1_req_q   <= s1_req_d;
-      s1_addr_q  <= s1_addr_d;
-      s1_wdata_q <= core_wdata_i;
-      s1_be_q    <= core_be_i;
-      s1_amo_q   <= take_core ? core_amo_i : AMO_NONE;
+      s1_valid_q   <= 1'b0;
+      s1_req_q     <= REQ_NONE;
+      s1_addr_q    <= '0;
+      s1_wdata_q   <= '0;
+      s1_be_q      <= '0;
+      s1_amo_q     <= AMO_NONE;
+      hold_valid_q <= 1'b0;
+      hold_req_q   <= REQ_NONE;
+      hold_addr_q  <= '0;
+      hold_wdata_q <= '0;
+      hold_be_q    <= '0;
+      hold_amo_q   <= AMO_NONE;
+    end else begin
+      if (do_preempt) begin
+        hold_valid_q <= 1'b1;
+        hold_req_q   <= s1_req_q;
+        hold_addr_q  <= s1_addr_q;
+        hold_wdata_q <= s1_wdata_q;
+        hold_be_q    <= s1_be_q;
+        hold_amo_q   <= s1_amo_q;
+      end else if (take_hold) begin
+        hold_valid_q <= 1'b0;
+      end
+
+      if (take_snoop) begin
+        s1_valid_q <= 1'b1;
+        s1_req_q   <= REQ_INV;
+        s1_addr_q  <= snp_inv_addr_i;
+        s1_amo_q   <= AMO_NONE;
+      end else if (take_hold) begin
+        s1_valid_q <= 1'b1;
+        s1_req_q   <= hold_req_q;
+        s1_addr_q  <= hold_addr_q;
+        s1_wdata_q <= hold_wdata_q;
+        s1_be_q    <= hold_be_q;
+        s1_amo_q   <= hold_amo_q;
+      end else if (take_core) begin
+        s1_valid_q <= 1'b1;
+        s1_req_q   <= core_we_i ? REQ_WRITE : REQ_READ;
+        s1_addr_q  <= core_addr_i;
+        s1_wdata_q <= core_wdata_i;
+        s1_be_q    <= core_be_i;
+        s1_amo_q   <= core_amo_i;
+      end else if (s1_advance) begin
+        s1_valid_q <= 1'b0;
+        s1_req_q   <= REQ_NONE;
+      end
     end
   end
 
@@ -410,6 +467,12 @@ module dcu
       end
     end
   end
+
+  // The MRSW lock stays asserted for as long as this write occupies stage 2,
+  // which spans the CCL_IDLE cycle that launches it and every CCL_WR_WAIT
+  // cycle until the shared memory grants it.
+  assign snp_wr_busy_o = s2_valid_q && (s2_req_q == REQ_WRITE) && !sc_fail;
+  assign snp_wr_addr_o = s2_addr_q;
 
   assign mem_rd_addr_o  = {s2_addr_q[AddrW-1:OffsW], {OffsW{1'b0}}};
   assign mem_wr_addr_o  = s2_addr_q;

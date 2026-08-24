@@ -7,6 +7,7 @@
 param(
   [string]$Tb        = "tb_dcu",
   [switch]$Wave,
+  [string]$Plusargs = "",
   [string]$VivadoBin = "D:\2025.1\Vivado\bin"
 )
 
@@ -54,7 +55,8 @@ if ($Wave) {
 } else {
   @("run all", "quit") | Set-Content -Encoding ascii $tcl
 }
-& $xsim "${Tb}_snap" -tclbatch $tcl --nolog
+if ($Plusargs -ne "") { & $xsim "${Tb}_snap" -tclbatch $tcl --nolog -testplusarg $Plusargs }
+else { & $xsim "${Tb}_snap" -tclbatch $tcl --nolog }
 $rc = $LASTEXITCODE
 Pop-Location
 exit $rc

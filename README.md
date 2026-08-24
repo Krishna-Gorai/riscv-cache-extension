@@ -94,11 +94,16 @@ powershell -File sim/run_xsim.ps1 -Tb tb_dcu
 # add -Wave to log all signals for waveform inspection
 ```
 
-Current result:
+```powershell
+powershell -File sim/run_xsim.ps1 -Tb tb_coherent_subsystem
+# add -Plusargs TRACE_BUS to print every bus request, grant and broadcast
+```
+
+Current results:
 
 ```
- DCU counters: rd_hit=1403 rd_miss=620 wr_hit=764 wr_miss=299
- tb_dcu PASSED  (2549 checks)
+ tb_dcu                 PASSED  (2544 checks)
+ tb_coherent_subsystem  PASSED  (3103 checks)
 ```
 
 `tb_dcu` covers compulsory misses, hits, write-through, no-allocate, byte
@@ -106,6 +111,14 @@ enables, snoop invalidation, the INV-before-MEM-RESP race, 2-way LRU
 replacement, failed and successful store-conditionals, and a 3000-operation
 randomised stress run against a golden memory model with concurrent
 invalidation traffic.
+
+`tb_coherent_subsystem` runs four DCUs on one snoopy bus against a shared
+memory model: a producer/consumer ping-pong, the Link Register and
+store-conditional semantics of Fig. 4, a randomised four-core stress checked
+with a **version monotonicity invariant** (a core that has observed version *k*
+of a location may never afterwards observe a version below *k*), and a final
+quiesce in which every core re-reads the whole window so that any line left
+stale in any cache is caught against the shared memory content.
 
 ---
 
@@ -115,14 +128,40 @@ invalidation traffic.
 |---|---|---|
 | **M0** | Repository, simulation flow, licence | ✅ done |
 | **M1** | DCU: arrays, HCL, CCL, SCL, self-checking testbench | ✅ done |
-| **M2** | Snoopy bus: round-robin arbiters, Link Register, Invalidation Table | ⏳ next |
-| **M3** | N-core coherent sub-system + coherence monitor (SWMR + value scoreboard) | ⏳ |
-| **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ⏳ |
+| **M2** | Snoopy bus: round-robin arbiters, Link Register, Invalidation Table | ✅ done |
+| **M3** | 4-core coherent sub-system + version-monotonicity coherence checker | ✅ done |
+| **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ⏳ next |
 | **M5** | 4-PE SoC over an AXI crossbar, plus a non-coherent baseline variant | ⏳ |
 | **M6** | Bare-metal kernels: memcpy, matrix multiply, 2-D convolution, FFT | ⏳ |
 | **M7** | Evaluation: reproduce the paper's latency, execution-time and hit-rate figures | ⏳ |
 | **M8** | Vivado synthesis and implementation, resource and power breakdown | ⏳ |
 | **M9** | Documentation, annotated waveforms, results write-up | ⏳ |
+
+---
+
+## Protocol issues found while building this
+
+Three real bugs the verification caught, all documented in
+`docs/architecture.md`:
+
+1. **Shared array read port vs. a stalled stage 2.** The Tag-RAM and Data-RAM
+   read address is driven by stage 1, so while stage 2 stalled on a miss,
+   stage 1's different index replaced the data stage 2 was still evaluating.
+   Every hit decision taken after a stall used the wrong set.
+2. **The MRSW lock was released too early.** Releasing it when the INV REQ is
+   *granted* is not enough: a remote read granted in the window before the
+   writer's write-through actually reaches memory fetches the pre-write value
+   and caches it, and no further invalidation is ever sent for it. The lock has
+   to be held until the write lands, so the DCU now exports a write-in-flight
+   signal that the bus screens against.
+3. **A failed store-conditional released another core's reservation.** There is
+   a single Link Register for the whole cluster, so an SC may only consume the
+   reservation if it is the one that owns it.
+
+A fourth, subtler one was a language trap rather than a protocol flaw: a helper
+function that read a module port directly instead of taking it as an argument
+did not put that port into the sensitivity list of a continuous assignment, so
+every invalidation was broadcast with a stale address.
 
 ---
 
