@@ -28,7 +28,9 @@ sim/out/
 sim/logs/
 
 # ---- software build ----
-sw/build/
+sw/build/*
+!sw/build/
+!sw/build/*.hex
 *.o
 *.elf
 *.bin

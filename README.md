@@ -22,6 +22,20 @@ paper's evaluation on a Xilinx Zynq UltraScale+ device.
 
 ## What is implemented
 
+### Processing Element
+
+An **unmodified CV32E40P** (pinned git submodule) with a private ITCM, an
+Instruction-Bridge and a Data-Bridge. The core issues ordinary loads and stores
+and never learns that a coherent cache is underneath it — that is the whole
+point of the paper's "seamless" claim.
+
+| Top nibble | Region |
+|---|---|
+| `0x0` | local ITCM — instruction fetch, and data writes that load code |
+| `0x1` | coherent shared data memory — through the private DCU |
+| `0x2` | shared instruction memory — non-coherent, across the AXI crossbar |
+| `0x8` | uncached control region — simulation exit handshake and console |
+
 ### Data Cache Unit (DCU)
 
 | Property | Value |
@@ -97,6 +111,23 @@ powershell -File sim/run_xsim.ps1 -Tb tb_dcu
 ```powershell
 powershell -File sim/run_xsim.ps1 -Tb tb_coherent_subsystem
 # add -Plusargs TRACE_BUS to print every bus request, grant and broadcast
+
+powershell -File sim/run_xsim.ps1 -Tb tb_pe -Hex sw/build/smoke.hex
+```
+
+Clone with the submodule, since `tb_pe` needs the core:
+
+```
+git clone --recursive https://github.com/Krishna-Gorai/riscv-cache-extension
+```
+
+Rebuilding the bare-metal kernels needs a RISC-V toolchain (tested with the
+xPack `riscv-none-elf-gcc` 15.2.0); prebuilt `.hex` images are committed so the
+simulations run without one.
+
+```bash
+cd sw && ./build.sh                     # or: make, if you have it
+TOOLCHAIN=/path/to/bin ./build.sh       # to point at your own toolchain
 ```
 
 Current results:
@@ -104,6 +135,7 @@ Current results:
 ```
  tb_dcu                 PASSED  (2544 checks)
  tb_coherent_subsystem  PASSED  (3103 checks)
+ tb_pe                  PASSED  (5 checks)
 ```
 
 `tb_dcu` covers compulsory misses, hits, write-through, no-allocate, byte
@@ -120,6 +152,23 @@ of a location may never afterwards observe a version below *k*), and a final
 quiesce in which every core re-reads the whole window so that any line left
 stale in any cache is caught against the shared memory content.
 
+`tb_pe` boots a real compiled program on the CV32E40P out of its ITCM. The
+kernel fills an array in the coherent shared data memory and sums it twice:
+
+```
+smoke: sum=12224
+ cycles         = 2092
+ DCU  rd_hit=112 rd_miss=16 wr_hit=0 wr_miss=66
+ read  hit rate = 87.50 %  (112 of 128)
+ write hit rate = 0.00 %   (0 of 66)
+ average        = 57.73 %  (112 of 194)
+```
+
+The split is reported the way Fig. 7 of the paper does. Reads hit 87.5 % — 16
+compulsory line fills serve 128 reads — while every store misses, because
+**write-through/no-allocate never installs a line on a write**. A kernel that
+stores into data it has already read shows a non-zero write hit rate.
+
 ---
 
 ## Roadmap
@@ -130,8 +179,8 @@ stale in any cache is caught against the shared memory content.
 | **M1** | DCU: arrays, HCL, CCL, SCL, self-checking testbench | ✅ done |
 | **M2** | Snoopy bus: round-robin arbiters, Link Register, Invalidation Table | ✅ done |
 | **M3** | 4-core coherent sub-system + version-monotonicity coherence checker | ✅ done |
-| **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ⏳ next |
-| **M5** | 4-PE SoC over an AXI crossbar, plus a non-coherent baseline variant | ⏳ |
+| **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ✅ done |
+| **M5** | 4-PE SoC over an AXI crossbar, plus a non-coherent baseline variant | ⏳ next |
 | **M6** | Bare-metal kernels: memcpy, matrix multiply, 2-D convolution, FFT | ⏳ |
 | **M7** | Evaluation: reproduce the paper's latency, execution-time and hit-rate figures | ⏳ |
 | **M8** | Vivado synthesis and implementation, resource and power breakdown | ⏳ |
