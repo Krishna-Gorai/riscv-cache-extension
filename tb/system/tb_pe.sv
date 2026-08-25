@@ -41,41 +41,28 @@ module tb_pe;
   amo_e                 dcu_amo;
 
   // ---------------------------------------------------------------------------
-  //  PE <-> shared instruction memory.
+  //  PE <-> everything off-PE, through the Data-Bridge's external port.
   //
-  //  A single PE boots straight out of its ITCM, so neither the fetch side nor
-  //  the Data-Bridge side is used here. Both are still handshaked so that a
-  //  stray access is absorbed rather than hanging the core.
+  //  In the SoC this port goes to the AXI crossbar, which decodes it. A single
+  //  PE has no crossbar, so the testbench decodes it here: the control region
+  //  at 0x8, and the shared instruction memory at 0x2, which a single PE
+  //  booting from its own ITCM never touches.
   // ---------------------------------------------------------------------------
-  logic             simem_i_req, simem_i_gnt, simem_i_rvalid;
-  logic [AddrW-1:0] simem_i_addr;
-  logic [DataW-1:0] simem_i_rdata;
+  logic                 simem_i_req, simem_i_gnt, simem_i_rvalid;
+  logic [AddrW-1:0]     simem_i_addr;
+  logic [DataW-1:0]     simem_i_rdata;
 
-  logic             simem_d_req, simem_d_gnt, simem_d_rvalid;
-  logic [AddrW-1:0] simem_d_addr;
-  logic [DataW-1:0] simem_d_rdata;
+  logic                 ext_req, ext_gnt, ext_we, ext_rvalid;
+  logic [AddrW-1:0]     ext_addr;
+  logic [WordBytes-1:0] ext_be;
+  logic [DataW-1:0]     ext_wdata, ext_rdata;
 
-  assign simem_i_gnt = simem_i_req;
-  assign simem_d_gnt = simem_d_req;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      simem_i_rvalid <= 1'b0;
-      simem_d_rvalid <= 1'b0;
-    end else begin
-      simem_i_rvalid <= simem_i_gnt;
-      simem_d_rvalid <= simem_d_gnt;
-    end
-  end
+  assign simem_i_gnt   = simem_i_req;
   assign simem_i_rdata = '0;
-  assign simem_d_rdata = '0;
-
-  // ---------------------------------------------------------------------------
-  //  PE <-> uncached control region
-  // ---------------------------------------------------------------------------
-  logic                 ctrl_req, ctrl_gnt, ctrl_we, ctrl_rvalid;
-  logic [AddrW-1:0]     ctrl_addr;
-  logic [WordBytes-1:0] ctrl_be;
-  logic [DataW-1:0]     ctrl_wdata, ctrl_rdata;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) simem_i_rvalid <= 1'b0;
+    else        simem_i_rvalid <= simem_i_gnt;
+  end
 
   logic        tohost_seen = 1'b0;
   logic [31:0] tohost_val  = '0;
@@ -83,27 +70,27 @@ module tb_pe;
 
   always_ff @(posedge clk) if (rst_n) cycle_count <= cycle_count + 1;
 
-  assign ctrl_gnt = ctrl_req;
+  assign ext_gnt = ext_req;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      ctrl_rvalid <= 1'b0;
-      ctrl_rdata  <= '0;
+      ext_rvalid <= 1'b0;
+      ext_rdata  <= '0;
     end else begin
-      ctrl_rvalid <= ctrl_gnt;
-      ctrl_rdata  <= '0;
-      if (ctrl_gnt) begin
-        if (ctrl_we) begin
-          case (ctrl_addr[7:0])
+      ext_rvalid <= ext_gnt;
+      ext_rdata  <= '0;
+      if (ext_gnt && (ext_addr[AddrW-1 -: 4] == 4'h8)) begin
+        if (ext_we) begin
+          case (ext_addr[7:0])
             8'h00: begin
-              tohost_val  <= ctrl_wdata;
+              tohost_val  <= ext_wdata;
               tohost_seen <= 1'b1;
             end
-            8'h04: $write("%c", ctrl_wdata[7:0]);
+            8'h04: $write("%c", ext_wdata[7:0]);
             default: ;
           endcase
-        end else if (ctrl_addr[7:0] == 8'h08) begin
-          ctrl_rdata <= 32'(cycle_count);
+        end else if (ext_addr[7:0] == 8'h08) begin
+          ext_rdata <= 32'(cycle_count);
         end
       end
     end
@@ -139,20 +126,14 @@ module tb_pe;
     .simem_i_rvalid_i (simem_i_rvalid),
     .simem_i_rdata_i  (simem_i_rdata),
 
-    .simem_d_req_o    (simem_d_req),
-    .simem_d_gnt_i    (simem_d_gnt),
-    .simem_d_addr_o   (simem_d_addr),
-    .simem_d_rvalid_i (simem_d_rvalid),
-    .simem_d_rdata_i  (simem_d_rdata),
-
-    .ctrl_req_o     (ctrl_req),
-    .ctrl_gnt_i     (ctrl_gnt),
-    .ctrl_addr_o    (ctrl_addr),
-    .ctrl_we_o      (ctrl_we),
-    .ctrl_be_o      (ctrl_be),
-    .ctrl_wdata_o   (ctrl_wdata),
-    .ctrl_rvalid_i  (ctrl_rvalid),
-    .ctrl_rdata_i   (ctrl_rdata),
+    .ext_req_o        (ext_req),
+    .ext_gnt_i        (ext_gnt),
+    .ext_addr_o       (ext_addr),
+    .ext_we_o         (ext_we),
+    .ext_be_o         (ext_be),
+    .ext_wdata_o      (ext_wdata),
+    .ext_rvalid_i     (ext_rvalid),
+    .ext_rdata_i      (ext_rdata),
 
     .core_sleep_o   ()
   );

@@ -11,14 +11,17 @@
 //  It is the address decoder of the core data port and routes an access to
 //    * the coherent shared data memory, through the private DCU
 //    * the local ITCM write port, when loading code
-//    * the shared instruction memory, read-only, which is where that code is
-//      read from during the boot-time transfer into the ITCM
-//    * an uncached control region, used by the testbenches for the exit
-//      handshake and character output
+//    * everything off-PE, through one external port
 //
-//  The snoopy bus itself is not touched here: the DCU owns that port, which is
-//  what makes the extension seamless -- the core sees an ordinary data port and
-//  is unaware that coherence is happening at all.
+//  That last one is a single port, not one per destination: off-PE traffic
+//  leaves on AXI, and splitting the shared instruction memory from the control
+//  region is the crossbar's address decode, not the bridge's. This is what the
+//  paper means by the Data-Bridge "providing an AXI compatible interface to the
+//  shared memory" -- one interface, not a bundle of them.
+//
+//  The snoopy bus is not touched here: the DCU owns that port, which is what
+//  makes the extension seamless -- the core sees an ordinary data port and is
+//  unaware that coherence is happening at all.
 // =============================================================================
 module data_bridge
   import cache_pkg::*;
@@ -69,26 +72,19 @@ module data_bridge
   input  logic                 itcm_rvalid_i,
   input  logic [DataW-1:0]     itcm_rdata_i,
 
-  // shared instruction memory, read side -- boot-time code transfer
-  output logic                 simem_req_o,
-  input  logic                 simem_gnt_i,
-  output logic [AddrW-1:0]     simem_addr_o,
-  input  logic                 simem_rvalid_i,
-  input  logic [DataW-1:0]     simem_rdata_i,
-
-  // uncached control region
-  output logic                 ctrl_req_o,
-  input  logic                 ctrl_gnt_i,
-  output logic [AddrW-1:0]     ctrl_addr_o,
-  output logic                 ctrl_we_o,
-  output logic [WordBytes-1:0] ctrl_be_o,
-  output logic [DataW-1:0]     ctrl_wdata_o,
-  input  logic                 ctrl_rvalid_i,
-  input  logic [DataW-1:0]     ctrl_rdata_i
+  // external port -- leaves the PE on AXI, decoded by the crossbar
+  output logic                 ext_req_o,
+  input  logic                 ext_gnt_i,
+  output logic [AddrW-1:0]     ext_addr_o,
+  output logic                 ext_we_o,
+  output logic [WordBytes-1:0] ext_be_o,
+  output logic [DataW-1:0]     ext_wdata_o,
+  input  logic                 ext_rvalid_i,
+  input  logic [DataW-1:0]     ext_rdata_i
 );
 
-  // 0 = DCU, 1 = ITCM, 2 = control, 3 = shared instruction memory
-  localparam int unsigned NumTgt = 4;
+  // 0 = DCU, 1 = ITCM, 2 = external (AXI)
+  localparam int unsigned NumTgt = 3;
 
   logic [NumTgt-1:0]       sel;
   logic [NumTgt-1:0]       dn_req, dn_gnt, dn_rvalid;
@@ -99,16 +95,15 @@ module data_bridge
     unique case (core_addr_i[AddrW-1 -: 4])
       SdmemNib: sel[0] = 1'b1;
       ItcmNib:  sel[1] = 1'b1;
+      SimemNib: sel[2] = 1'b1;
       CtrlNib:  sel[2] = 1'b1;
-      SimemNib: sel[3] = 1'b1;
-      default:  sel    = '0;
+      default:  sel    = '0;            // absorbed by the router's void responder
     endcase
   end
 
-  assign dcu_req_o    = dn_req[0];
-  assign itcm_req_o   = dn_req[1];
-  assign ctrl_req_o   = dn_req[2];
-  assign simem_req_o  = dn_req[3];
+  assign dcu_req_o  = dn_req[0];
+  assign itcm_req_o = dn_req[1];
+  assign ext_req_o  = dn_req[2];
 
   // The payload is simply broadcast; only the selected target ever samples it.
   assign dcu_addr_o   = core_addr_i;
@@ -122,18 +117,14 @@ module data_bridge
   assign itcm_be_o    = core_be_i;
   assign itcm_wdata_o = core_wdata_i;
 
-  assign ctrl_addr_o  = core_addr_i;
-  assign ctrl_we_o    = core_we_i;
-  assign ctrl_be_o    = core_be_i;
-  assign ctrl_wdata_o = core_wdata_i;
+  assign ext_addr_o   = core_addr_i;
+  assign ext_we_o     = core_we_i;
+  assign ext_be_o     = core_be_i;
+  assign ext_wdata_o  = core_wdata_i;
 
-  // The shared instruction memory is read-only; a store that lands there is
-  // handshaked and discarded rather than deadlocking the core.
-  assign simem_addr_o = core_addr_i;
-
-  assign dn_gnt    = {simem_gnt_i,    ctrl_gnt_i,    itcm_gnt_i,    dcu_gnt_i};
-  assign dn_rvalid = {simem_rvalid_i, ctrl_rvalid_i, itcm_rvalid_i, dcu_rvalid_i};
-  assign dn_rdata  = {simem_rdata_i,  ctrl_rdata_i,  itcm_rdata_i,  dcu_rdata_i};
+  assign dn_gnt    = {ext_gnt_i,    itcm_gnt_i,    dcu_gnt_i};
+  assign dn_rvalid = {ext_rvalid_i, itcm_rvalid_i, dcu_rvalid_i};
+  assign dn_rdata  = {ext_rdata_i,  itcm_rdata_i,  dcu_rdata_i};
 
   bridge_router #(
     .NumTgt (NumTgt),

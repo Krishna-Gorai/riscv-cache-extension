@@ -1,10 +1,10 @@
 // =============================================================================
 //  soc_top.sv -- the multi-core RISC-V SoC of Fig. 1.
 //
-//  NumPes Processing Elements, a shared scratchpad instruction memory that
-//  doubles as the boot memory, a shared data memory, and -- selected by the
-//  Coherent parameter -- either the data-cache sub-system of the paper or no
-//  data cache at all.
+//  NumPes Processing Elements around an AXI4 crossbar, a shared scratchpad
+//  instruction memory that doubles as the boot memory, a shared data memory,
+//  and -- selected by the Coherent parameter -- either the data-cache
+//  sub-system of the paper or no data cache at all.
 //
 //  Section IV-A builds exactly these two systems and compares them:
 //
@@ -17,6 +17,19 @@
 //  Nothing outside the g_dcache generate block changes between the two, which
 //  is the "seamless" claim made structural: the cores, the bridges, the ITCMs,
 //  the interconnect and the software are all identical.
+//
+//  AXI master map. Masters are grouped by function rather than interleaved per
+//  PE, so that the control region can recover which PE is talking to it from
+//  the AXI ID by simple subtraction (see axi_ctrl's IdBase):
+//
+//    id  0            .. NumPes-1     Instruction-Bridge, fetch
+//    id  NumPes       .. 2*NumPes-1   DCU memory port, line fills + write-through
+//    id  2*NumPes     .. 3*NumPes-1   Data-Bridge external port
+//
+//  Slave map, by the top address nibble:
+//
+//    0x1  shared data memory        0x2  shared instruction memory
+//    0x8  control region            0x0  local ITCM -- never leaves the PE
 //
 //  Boot flow, following Section III-B: every PE starts fetching from the shared
 //  instruction memory, and its boot stub uses the Data-Bridge to read the code
@@ -46,7 +59,12 @@ module soc_top
 
   localparam int unsigned WordBytes  = DataW / 8,
   localparam int unsigned LineBits   = LineBytes * 8,
-  localparam int unsigned NumSiPorts = 2 * NumPes
+
+  localparam int unsigned NumMst     = 3 * NumPes,
+  localparam int unsigned NumSlv     = 3,
+  localparam int unsigned LenW       = 8,
+  localparam int unsigned IdW        = (NumMst <= 1) ? 1 : $clog2(NumMst),
+  localparam int unsigned StrbW      = DataW / 8
 ) (
   input  logic                    clk_i,
   input  logic                    rst_ni,
@@ -77,7 +95,7 @@ module soc_top
   logic [NumPes*2-1:0]         dcu_amo;
 
   // ---------------------------------------------------------------------------
-  //  Data-cache sub-system <-> shared data memory
+  //  Data-cache sub-system <-> its AXI master
   // ---------------------------------------------------------------------------
   logic [NumPes-1:0]           mrd_req, mrd_gnt, mrd_rvalid, mrd_line;
   logic [NumPes*AddrW-1:0]     mrd_addr;
@@ -89,20 +107,58 @@ module soc_top
   logic [NumPes*DataW-1:0]     mwr_wdata;
 
   // ---------------------------------------------------------------------------
-  //  PE <-> shared instruction memory. Ports [0..NumPes-1] are the fetch side,
-  //  ports [NumPes..2*NumPes-1] the Data-Bridge side used during boot.
+  //  PE ports that leave on AXI
   // ---------------------------------------------------------------------------
-  logic [NumSiPorts-1:0]       si_req, si_gnt, si_rvalid;
-  logic [NumSiPorts*AddrW-1:0] si_addr;
-  logic [NumSiPorts*DataW-1:0] si_rdata;
+  logic [NumPes-1:0]           if_req, if_gnt, if_rvalid;
+  logic [NumPes*AddrW-1:0]     if_addr;
+  logic [NumPes*DataW-1:0]     if_rdata;
+
+  logic [NumPes-1:0]           ex_req, ex_gnt, ex_we, ex_rvalid;
+  logic [NumPes*AddrW-1:0]     ex_addr;
+  logic [NumPes*WordBytes-1:0] ex_be;
+  logic [NumPes*DataW-1:0]     ex_wdata, ex_rdata;
 
   // ---------------------------------------------------------------------------
-  //  PE <-> control region
+  //  AXI, master side
   // ---------------------------------------------------------------------------
-  logic [NumPes-1:0]           ct_req, ct_gnt, ct_we, ct_rvalid;
-  logic [NumPes*AddrW-1:0]     ct_addr;
-  logic [NumPes*WordBytes-1:0] ct_be;
-  logic [NumPes*DataW-1:0]     ct_wdata, ct_rdata;
+  logic [NumMst-1:0]       m_arvalid, m_arready;
+  logic [NumMst*AddrW-1:0] m_araddr;
+  logic [NumMst*LenW-1:0]  m_arlen;
+  logic [NumMst-1:0]       m_rvalid, m_rready, m_rlast;
+  logic [NumMst*DataW-1:0] m_rdata;
+  logic [NumMst*2-1:0]     m_rresp;
+
+  logic [NumMst-1:0]       m_awvalid, m_awready;
+  logic [NumMst*AddrW-1:0] m_awaddr;
+  logic [NumMst*LenW-1:0]  m_awlen;
+  logic [NumMst-1:0]       m_wvalid, m_wready, m_wlast;
+  logic [NumMst*DataW-1:0] m_wdata;
+  logic [NumMst*StrbW-1:0] m_wstrb;
+  logic [NumMst-1:0]       m_bvalid, m_bready;
+  logic [NumMst*2-1:0]     m_bresp;
+
+  // ---------------------------------------------------------------------------
+  //  AXI, slave side
+  // ---------------------------------------------------------------------------
+  logic [NumSlv-1:0]       s_arvalid, s_arready;
+  logic [NumSlv*AddrW-1:0] s_araddr;
+  logic [NumSlv*LenW-1:0]  s_arlen;
+  logic [NumSlv*IdW-1:0]   s_arid;
+  logic [NumSlv-1:0]       s_rvalid, s_rready, s_rlast;
+  logic [NumSlv*DataW-1:0] s_rdata;
+  logic [NumSlv*2-1:0]     s_rresp;
+  logic [NumSlv*IdW-1:0]   s_rid;
+
+  logic [NumSlv-1:0]       s_awvalid, s_awready;
+  logic [NumSlv*AddrW-1:0] s_awaddr;
+  logic [NumSlv*LenW-1:0]  s_awlen;
+  logic [NumSlv*IdW-1:0]   s_awid;
+  logic [NumSlv-1:0]       s_wvalid, s_wready, s_wlast;
+  logic [NumSlv*DataW-1:0] s_wdata;
+  logic [NumSlv*StrbW-1:0] s_wstrb;
+  logic [NumSlv-1:0]       s_bvalid, s_bready;
+  logic [NumSlv*2-1:0]     s_bresp;
+  logic [NumSlv*IdW-1:0]   s_bid;
 
   // ===========================================================================
   //  Processing Elements
@@ -132,28 +188,143 @@ module soc_top
       .dcu_rvalid_i     (dcu_rvalid[p]),
       .dcu_rdata_i      (dcu_rdata[p*DataW     +: DataW]),
 
-      .simem_i_req_o    (si_req[p]),
-      .simem_i_gnt_i    (si_gnt[p]),
-      .simem_i_addr_o   (si_addr[p*AddrW +: AddrW]),
-      .simem_i_rvalid_i (si_rvalid[p]),
-      .simem_i_rdata_i  (si_rdata[p*DataW +: DataW]),
+      .simem_i_req_o    (if_req[p]),
+      .simem_i_gnt_i    (if_gnt[p]),
+      .simem_i_addr_o   (if_addr[p*AddrW +: AddrW]),
+      .simem_i_rvalid_i (if_rvalid[p]),
+      .simem_i_rdata_i  (if_rdata[p*DataW +: DataW]),
 
-      .simem_d_req_o    (si_req[NumPes+p]),
-      .simem_d_gnt_i    (si_gnt[NumPes+p]),
-      .simem_d_addr_o   (si_addr[(NumPes+p)*AddrW +: AddrW]),
-      .simem_d_rvalid_i (si_rvalid[NumPes+p]),
-      .simem_d_rdata_i  (si_rdata[(NumPes+p)*DataW +: DataW]),
-
-      .ctrl_req_o       (ct_req[p]),
-      .ctrl_gnt_i       (ct_gnt[p]),
-      .ctrl_addr_o      (ct_addr [p*AddrW     +: AddrW]),
-      .ctrl_we_o        (ct_we[p]),
-      .ctrl_be_o        (ct_be   [p*WordBytes +: WordBytes]),
-      .ctrl_wdata_o     (ct_wdata[p*DataW     +: DataW]),
-      .ctrl_rvalid_i    (ct_rvalid[p]),
-      .ctrl_rdata_i     (ct_rdata[p*DataW     +: DataW]),
+      .ext_req_o        (ex_req[p]),
+      .ext_gnt_i        (ex_gnt[p]),
+      .ext_addr_o       (ex_addr [p*AddrW     +: AddrW]),
+      .ext_we_o         (ex_we[p]),
+      .ext_be_o         (ex_be   [p*WordBytes +: WordBytes]),
+      .ext_wdata_o      (ex_wdata[p*DataW     +: DataW]),
+      .ext_rvalid_i     (ex_rvalid[p]),
+      .ext_rdata_i      (ex_rdata[p*DataW     +: DataW]),
 
       .core_sleep_o     (core_sleep_o[p])
+    );
+
+    // --- master id p: instruction fetch -------------------------------------
+    axi_master_simple #(
+      .AddrW (AddrW), .DataW (DataW), .LenW (LenW)
+    ) u_axi_ifetch (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .req_i     (if_req[p]),
+      .gnt_o     (if_gnt[p]),
+      .addr_i    (if_addr[p*AddrW +: AddrW]),
+      .we_i      (1'b0),
+      .be_i      ({StrbW{1'b1}}),
+      .wdata_i   ({DataW{1'b0}}),
+      .rvalid_o  (if_rvalid[p]),
+      .rdata_o   (if_rdata[p*DataW +: DataW]),
+
+      .arvalid_o (m_arvalid[p]),
+      .arready_i (m_arready[p]),
+      .araddr_o  (m_araddr[p*AddrW +: AddrW]),
+      .arlen_o   (m_arlen[p*LenW +: LenW]),
+      .rvalid_i  (m_rvalid[p]),
+      .rready_o  (m_rready[p]),
+      .rdata_i   (m_rdata[p*DataW +: DataW]),
+      .rresp_i   (m_rresp[p*2 +: 2]),
+      .rlast_i   (m_rlast[p]),
+      .awvalid_o (m_awvalid[p]),
+      .awready_i (m_awready[p]),
+      .awaddr_o  (m_awaddr[p*AddrW +: AddrW]),
+      .awlen_o   (m_awlen[p*LenW +: LenW]),
+      .wvalid_o  (m_wvalid[p]),
+      .wready_i  (m_wready[p]),
+      .wdata_o   (m_wdata[p*DataW +: DataW]),
+      .wstrb_o   (m_wstrb[p*StrbW +: StrbW]),
+      .wlast_o   (m_wlast[p]),
+      .bvalid_i  (m_bvalid[p]),
+      .bready_o  (m_bready[p]),
+      .bresp_i   (m_bresp[p*2 +: 2])
+    );
+
+    // --- master id NumPes+p: the cache's memory port -------------------------
+    localparam int unsigned MD = NumPes + p;
+
+    axi_master_dcu #(
+      .AddrW (AddrW), .DataW (DataW), .LineBytes (LineBytes), .LenW (LenW)
+    ) u_axi_dcu (
+      .clk_i       (clk_i),
+      .rst_ni      (rst_ni),
+      .rd_req_i    (mrd_req[p]),
+      .rd_addr_i   (mrd_addr[p*AddrW +: AddrW]),
+      .rd_line_i   (mrd_line[p]),
+      .rd_gnt_o    (mrd_gnt[p]),
+      .rd_rvalid_o (mrd_rvalid[p]),
+      .rd_rdata_o  (mrd_rdata[p*LineBits +: LineBits]),
+      .wr_req_i    (mwr_req[p]),
+      .wr_addr_i   (mwr_addr[p*AddrW +: AddrW]),
+      .wr_be_i     (mwr_be[p*WordBytes +: WordBytes]),
+      .wr_wdata_i  (mwr_wdata[p*DataW +: DataW]),
+      .wr_gnt_o    (mwr_gnt[p]),
+
+      .arvalid_o (m_arvalid[MD]),
+      .arready_i (m_arready[MD]),
+      .araddr_o  (m_araddr[MD*AddrW +: AddrW]),
+      .arlen_o   (m_arlen[MD*LenW +: LenW]),
+      .rvalid_i  (m_rvalid[MD]),
+      .rready_o  (m_rready[MD]),
+      .rdata_i   (m_rdata[MD*DataW +: DataW]),
+      .rresp_i   (m_rresp[MD*2 +: 2]),
+      .rlast_i   (m_rlast[MD]),
+      .awvalid_o (m_awvalid[MD]),
+      .awready_i (m_awready[MD]),
+      .awaddr_o  (m_awaddr[MD*AddrW +: AddrW]),
+      .awlen_o   (m_awlen[MD*LenW +: LenW]),
+      .wvalid_o  (m_wvalid[MD]),
+      .wready_i  (m_wready[MD]),
+      .wdata_o   (m_wdata[MD*DataW +: DataW]),
+      .wstrb_o   (m_wstrb[MD*StrbW +: StrbW]),
+      .wlast_o   (m_wlast[MD]),
+      .bvalid_i  (m_bvalid[MD]),
+      .bready_o  (m_bready[MD]),
+      .bresp_i   (m_bresp[MD*2 +: 2])
+    );
+
+    // --- master id 2*NumPes+p: the Data-Bridge's external port ---------------
+    localparam int unsigned ME = 2*NumPes + p;
+
+    axi_master_simple #(
+      .AddrW (AddrW), .DataW (DataW), .LenW (LenW)
+    ) u_axi_ext (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .req_i     (ex_req[p]),
+      .gnt_o     (ex_gnt[p]),
+      .addr_i    (ex_addr[p*AddrW +: AddrW]),
+      .we_i      (ex_we[p]),
+      .be_i      (ex_be[p*StrbW +: StrbW]),
+      .wdata_i   (ex_wdata[p*DataW +: DataW]),
+      .rvalid_o  (ex_rvalid[p]),
+      .rdata_o   (ex_rdata[p*DataW +: DataW]),
+
+      .arvalid_o (m_arvalid[ME]),
+      .arready_i (m_arready[ME]),
+      .araddr_o  (m_araddr[ME*AddrW +: AddrW]),
+      .arlen_o   (m_arlen[ME*LenW +: LenW]),
+      .rvalid_i  (m_rvalid[ME]),
+      .rready_o  (m_rready[ME]),
+      .rdata_i   (m_rdata[ME*DataW +: DataW]),
+      .rresp_i   (m_rresp[ME*2 +: 2]),
+      .rlast_i   (m_rlast[ME]),
+      .awvalid_o (m_awvalid[ME]),
+      .awready_i (m_awready[ME]),
+      .awaddr_o  (m_awaddr[ME*AddrW +: AddrW]),
+      .awlen_o   (m_awlen[ME*LenW +: LenW]),
+      .wvalid_o  (m_wvalid[ME]),
+      .wready_i  (m_wready[ME]),
+      .wdata_o   (m_wdata[ME*DataW +: DataW]),
+      .wstrb_o   (m_wstrb[ME*StrbW +: StrbW]),
+      .wlast_o   (m_wlast[ME]),
+      .bvalid_i  (m_bvalid[ME]),
+      .bready_o  (m_bready[ME]),
+      .bresp_i   (m_bresp[ME*2 +: 2])
     );
   end
 
@@ -250,62 +421,179 @@ module soc_top
   end
 
   // ===========================================================================
-  //  Shared memories and the control region
+  //  The AXI crossbar
   // ===========================================================================
-  shared_data_mem #(
-    .NumPorts  (NumPes),
-    .AddrW     (AddrW),
-    .DataW     (DataW),
-    .LineBytes (LineBytes),
-    .SizeBytes (SdmemBytes),
-    .AccessLat (MemLat)
-  ) u_sdmem (
+  //  Slave 0 = shared data memory, 1 = shared instruction memory, 2 = control.
+  //  Index 0 is the least significant field of the packed map.
+  axi_xbar #(
+    .NumMasters     (NumMst),
+    .NumSlaves      (NumSlv),
+    .AddrW          (AddrW),
+    .DataW          (DataW),
+    .LenW           (LenW),
+    .MaxOutstanding (4),
+    .SlaveBase      ({32'h8000_0000, 32'h2000_0000, 32'h1000_0000}),
+    .SlaveMask      ({32'hF000_0000, 32'hF000_0000, 32'hF000_0000})
+  ) u_xbar (
     .clk_i       (clk_i),
     .rst_ni      (rst_ni),
-    .rd_req_i    (mrd_req),
-    .rd_addr_i   (mrd_addr),
-    .rd_line_i   (mrd_line),
-    .rd_gnt_o    (mrd_gnt),
-    .rd_rvalid_o (mrd_rvalid),
-    .rd_rdata_o  (mrd_rdata),
-    .wr_req_i    (mwr_req),
-    .wr_addr_i   (mwr_addr),
-    .wr_be_i     (mwr_be),
-    .wr_wdata_i  (mwr_wdata),
-    .wr_gnt_o    (mwr_gnt)
+
+    .m_arvalid_i (m_arvalid),
+    .m_arready_o (m_arready),
+    .m_araddr_i  (m_araddr),
+    .m_arlen_i   (m_arlen),
+    .m_rvalid_o  (m_rvalid),
+    .m_rready_i  (m_rready),
+    .m_rdata_o   (m_rdata),
+    .m_rresp_o   (m_rresp),
+    .m_rlast_o   (m_rlast),
+    .m_awvalid_i (m_awvalid),
+    .m_awready_o (m_awready),
+    .m_awaddr_i  (m_awaddr),
+    .m_awlen_i   (m_awlen),
+    .m_wvalid_i  (m_wvalid),
+    .m_wready_o  (m_wready),
+    .m_wdata_i   (m_wdata),
+    .m_wstrb_i   (m_wstrb),
+    .m_wlast_i   (m_wlast),
+    .m_bvalid_o  (m_bvalid),
+    .m_bready_i  (m_bready),
+    .m_bresp_o   (m_bresp),
+
+    .s_arvalid_o (s_arvalid),
+    .s_arready_i (s_arready),
+    .s_araddr_o  (s_araddr),
+    .s_arlen_o   (s_arlen),
+    .s_arid_o    (s_arid),
+    .s_rvalid_i  (s_rvalid),
+    .s_rready_o  (s_rready),
+    .s_rdata_i   (s_rdata),
+    .s_rresp_i   (s_rresp),
+    .s_rlast_i   (s_rlast),
+    .s_rid_i     (s_rid),
+    .s_awvalid_o (s_awvalid),
+    .s_awready_i (s_awready),
+    .s_awaddr_o  (s_awaddr),
+    .s_awlen_o   (s_awlen),
+    .s_awid_o    (s_awid),
+    .s_wvalid_o  (s_wvalid),
+    .s_wready_i  (s_wready),
+    .s_wdata_o   (s_wdata),
+    .s_wstrb_o   (s_wstrb),
+    .s_wlast_o   (s_wlast),
+    .s_bvalid_i  (s_bvalid),
+    .s_bready_o  (s_bready),
+    .s_bresp_i   (s_bresp),
+    .s_bid_i     (s_bid)
   );
 
-  shared_instr_mem #(
-    .NumPorts  (NumSiPorts),
-    .AddrW     (AddrW),
-    .DataW     (DataW),
-    .SizeBytes (SimemBytes),
-    .AccessLat (MemLat)
+  // ===========================================================================
+  //  Slave 0 -- shared data memory
+  // ===========================================================================
+  axi_sram #(
+    .AddrW (AddrW), .DataW (DataW), .IdW (IdW), .LenW (LenW),
+    .SizeBytes (SdmemBytes), .AccessLat (MemLat)
+  ) u_sdmem (
+    .clk_i     (clk_i),
+    .rst_ni    (rst_ni),
+    .arvalid_i (s_arvalid[0]),
+    .arready_o (s_arready[0]),
+    .araddr_i  (s_araddr[0*AddrW +: AddrW]),
+    .arlen_i   (s_arlen[0*LenW +: LenW]),
+    .arid_i    (s_arid[0*IdW +: IdW]),
+    .rvalid_o  (s_rvalid[0]),
+    .rready_i  (s_rready[0]),
+    .rdata_o   (s_rdata[0*DataW +: DataW]),
+    .rresp_o   (s_rresp[0*2 +: 2]),
+    .rlast_o   (s_rlast[0]),
+    .rid_o     (s_rid[0*IdW +: IdW]),
+    .awvalid_i (s_awvalid[0]),
+    .awready_o (s_awready[0]),
+    .awaddr_i  (s_awaddr[0*AddrW +: AddrW]),
+    .awlen_i   (s_awlen[0*LenW +: LenW]),
+    .awid_i    (s_awid[0*IdW +: IdW]),
+    .wvalid_i  (s_wvalid[0]),
+    .wready_o  (s_wready[0]),
+    .wdata_i   (s_wdata[0*DataW +: DataW]),
+    .wstrb_i   (s_wstrb[0*StrbW +: StrbW]),
+    .wlast_i   (s_wlast[0]),
+    .bvalid_o  (s_bvalid[0]),
+    .bready_i  (s_bready[0]),
+    .bresp_o   (s_bresp[0*2 +: 2]),
+    .bid_o     (s_bid[0*IdW +: IdW])
+  );
+
+  // ===========================================================================
+  //  Slave 1 -- shared instruction memory / boot memory
+  // ===========================================================================
+  axi_sram #(
+    .AddrW (AddrW), .DataW (DataW), .IdW (IdW), .LenW (LenW),
+    .SizeBytes (SimemBytes), .AccessLat (MemLat)
   ) u_simem (
-    .clk_i    (clk_i),
-    .rst_ni   (rst_ni),
-    .req_i    (si_req),
-    .addr_i   (si_addr),
-    .gnt_o    (si_gnt),
-    .rvalid_o (si_rvalid),
-    .rdata_o  (si_rdata)
+    .clk_i     (clk_i),
+    .rst_ni    (rst_ni),
+    .arvalid_i (s_arvalid[1]),
+    .arready_o (s_arready[1]),
+    .araddr_i  (s_araddr[1*AddrW +: AddrW]),
+    .arlen_i   (s_arlen[1*LenW +: LenW]),
+    .arid_i    (s_arid[1*IdW +: IdW]),
+    .rvalid_o  (s_rvalid[1]),
+    .rready_i  (s_rready[1]),
+    .rdata_o   (s_rdata[1*DataW +: DataW]),
+    .rresp_o   (s_rresp[1*2 +: 2]),
+    .rlast_o   (s_rlast[1]),
+    .rid_o     (s_rid[1*IdW +: IdW]),
+    .awvalid_i (s_awvalid[1]),
+    .awready_o (s_awready[1]),
+    .awaddr_i  (s_awaddr[1*AddrW +: AddrW]),
+    .awlen_i   (s_awlen[1*LenW +: LenW]),
+    .awid_i    (s_awid[1*IdW +: IdW]),
+    .wvalid_i  (s_wvalid[1]),
+    .wready_o  (s_wready[1]),
+    .wdata_i   (s_wdata[1*DataW +: DataW]),
+    .wstrb_i   (s_wstrb[1*StrbW +: StrbW]),
+    .wlast_i   (s_wlast[1]),
+    .bvalid_o  (s_bvalid[1]),
+    .bready_i  (s_bready[1]),
+    .bresp_o   (s_bresp[1*2 +: 2]),
+    .bid_o     (s_bid[1*IdW +: IdW])
   );
 
-  soc_ctrl #(
-    .NumPes (NumPes),
-    .AddrW  (AddrW),
-    .DataW  (DataW)
+  // ===========================================================================
+  //  Slave 2 -- uncached control region
+  // ===========================================================================
+  axi_ctrl #(
+    .NumPes (NumPes), .AddrW (AddrW), .DataW (DataW),
+    .IdW (IdW), .LenW (LenW), .IdBase (2*NumPes)
   ) u_ctrl (
-    .clk_i           (clk_i),
-    .rst_ni          (rst_ni),
-    .req_i           (ct_req),
-    .gnt_o           (ct_gnt),
-    .addr_i          (ct_addr),
-    .we_i            (ct_we),
-    .be_i            (ct_be),
-    .wdata_i         (ct_wdata),
-    .rvalid_o        (ct_rvalid),
-    .rdata_o         (ct_rdata),
+    .clk_i     (clk_i),
+    .rst_ni    (rst_ni),
+    .arvalid_i (s_arvalid[2]),
+    .arready_o (s_arready[2]),
+    .araddr_i  (s_araddr[2*AddrW +: AddrW]),
+    .arlen_i   (s_arlen[2*LenW +: LenW]),
+    .arid_i    (s_arid[2*IdW +: IdW]),
+    .rvalid_o  (s_rvalid[2]),
+    .rready_i  (s_rready[2]),
+    .rdata_o   (s_rdata[2*DataW +: DataW]),
+    .rresp_o   (s_rresp[2*2 +: 2]),
+    .rlast_o   (s_rlast[2]),
+    .rid_o     (s_rid[2*IdW +: IdW]),
+    .awvalid_i (s_awvalid[2]),
+    .awready_o (s_awready[2]),
+    .awaddr_i  (s_awaddr[2*AddrW +: AddrW]),
+    .awlen_i   (s_awlen[2*LenW +: LenW]),
+    .awid_i    (s_awid[2*IdW +: IdW]),
+    .wvalid_i  (s_wvalid[2]),
+    .wready_o  (s_wready[2]),
+    .wdata_i   (s_wdata[2*DataW +: DataW]),
+    .wstrb_i   (s_wstrb[2*StrbW +: StrbW]),
+    .wlast_i   (s_wlast[2]),
+    .bvalid_o  (s_bvalid[2]),
+    .bready_i  (s_bready[2]),
+    .bresp_o   (s_bresp[2*2 +: 2]),
+    .bid_o     (s_bid[2*IdW +: IdW]),
+
     .done_o          (done_o),
     .exit_code_o     (exit_code_o),
     .putchar_valid_o (putchar_valid_o),

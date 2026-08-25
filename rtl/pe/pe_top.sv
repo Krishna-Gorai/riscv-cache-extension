@@ -52,25 +52,19 @@ module pe_top
   input  logic                 simem_i_rvalid_i,
   input  logic [DataW-1:0]     simem_i_rdata_i,
 
-  // --- shared instruction memory, data side (Data-Bridge) -------------------
-  //  The boot stub reads the code image through this port and writes it into
-  //  the ITCM: the "instructions transfer from the shared instruction memory
-  //  to the ITCM (write-mode)" of Section III-B.
-  output logic                 simem_d_req_o,
-  input  logic                 simem_d_gnt_i,
-  output logic [AddrW-1:0]     simem_d_addr_o,
-  input  logic                 simem_d_rvalid_i,
-  input  logic [DataW-1:0]     simem_d_rdata_i,
-
-  // --- uncached control region ----------------------------------------------
-  output logic                 ctrl_req_o,
-  input  logic                 ctrl_gnt_i,
-  output logic [AddrW-1:0]     ctrl_addr_o,
-  output logic                 ctrl_we_o,
-  output logic [WordBytes-1:0] ctrl_be_o,
-  output logic [DataW-1:0]     ctrl_wdata_o,
-  input  logic                 ctrl_rvalid_i,
-  input  logic [DataW-1:0]     ctrl_rdata_i,
+  // --- Data-Bridge external port --------------------------------------------
+  //  Everything the PE reaches off-chip-side leaves here and is decoded by the
+  //  crossbar: the shared instruction memory during the boot transfer -- the
+  //  "instructions transfer from the shared instruction memory to the ITCM
+  //  (write-mode)" of Section III-B -- and the uncached control region after.
+  output logic                 ext_req_o,
+  input  logic                 ext_gnt_i,
+  output logic [AddrW-1:0]     ext_addr_o,
+  output logic                 ext_we_o,
+  output logic [WordBytes-1:0] ext_be_o,
+  output logic [DataW-1:0]     ext_wdata_o,
+  input  logic                 ext_rvalid_i,
+  input  logic [DataW-1:0]     ext_rdata_i,
 
   output logic                 core_sleep_o
 );
@@ -247,20 +241,14 @@ module pe_top
     .itcm_rvalid_i (itcm_d_rvalid),
     .itcm_rdata_i  (itcm_d_rdata),
 
-    .simem_req_o   (simem_d_req_o),
-    .simem_gnt_i   (simem_d_gnt_i),
-    .simem_addr_o  (simem_d_addr_o),
-    .simem_rvalid_i(simem_d_rvalid_i),
-    .simem_rdata_i (simem_d_rdata_i),
-
-    .ctrl_req_o    (ctrl_req_o),
-    .ctrl_gnt_i    (ctrl_gnt_i),
-    .ctrl_addr_o   (ctrl_addr_o),
-    .ctrl_we_o     (ctrl_we_o),
-    .ctrl_be_o     (ctrl_be_o),
-    .ctrl_wdata_o  (ctrl_wdata_o),
-    .ctrl_rvalid_i (ctrl_rvalid_i),
-    .ctrl_rdata_i  (ctrl_rdata_i)
+    .ext_req_o     (ext_req_o),
+    .ext_gnt_i     (ext_gnt_i),
+    .ext_addr_o    (ext_addr_o),
+    .ext_we_o      (ext_we_o),
+    .ext_be_o      (ext_be_o),
+    .ext_wdata_o   (ext_wdata_o),
+    .ext_rvalid_i  (ext_rvalid_i),
+    .ext_rdata_i   (ext_rdata_i)
   );
 
 endmodule

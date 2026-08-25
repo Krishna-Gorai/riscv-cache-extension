@@ -36,6 +36,27 @@ point of the paper's "seamless" claim.
 | `0x2` | shared instruction memory — non-coherent, across the AXI crossbar |
 | `0x8` | uncached control region — simulation exit handshake and console |
 
+### AXI4 crossbar
+
+The PEs meet the shared memories in a real AXI4 fabric, which Table I of the
+paper lists as its own resource line. Each PE presents three masters -- the
+Instruction-Bridge's fetch port, the DCU's memory port, and the Data-Bridge's
+external port -- onto three slaves: the shared data memory, the shared
+instruction memory, and the control region.
+
+AXI4 rather than AXI4-Lite is the point: a DCU line fill is one **INCR burst**
+of `LineBytes/4` beats, so a miss pays for one arbitration and one address
+phase instead of four. Write-through goes the other way as a single beat whose
+`WSTRB` carries the byte enables. `AxCACHE`, `AxPROT`, `AxQOS`, `AxREGION`,
+`AxLOCK` and WRAP/FIXED bursts are deliberately not implemented: nothing here
+uses them, and they would inflate the figure Table I is compared against.
+
+Masters carry no ID of their own -- the crossbar tags each transaction with the
+master index and routes the response back by it. A master may have several
+transactions in flight but only to one slave at a time, which is what keeps its
+responses ordered without a reorder buffer. An address matching no slave is
+answered with `DECERR` rather than left to hang.
+
 ### Data Cache Unit (DCU)
 
 | Property | Value |
@@ -87,16 +108,18 @@ rtl/
   cache/dcu_bypass.sv      the non-coherent baseline: a PE with no data cache
   snoop/                   snoopy bus: arbiters, link register, inv. table
   pe/                      data bridge, instruction bridge, ITCM, PE top
+  axi/axi_xbar.sv          the AXI4 crossbar of Fig. 1
+  axi/axi_sram.sv          AXI4 slave wrapping a memory array
+  axi/axi_ctrl.sv          uncached control region + the hardware barrier
+  axi/axi_master_simple.sv single-beat port to AXI4 master
+  axi/axi_master_dcu.sv    cache memory port to AXI4: line fill as one burst
   soc/coherent_subsystem.sv  NumCores DCUs + the snoopy bus
-  soc/shared_data_mem.sv   dual-ported scratchpad, line reads and word reads
-  soc/shared_instr_mem.sv  multi-port boot memory
-  soc/soc_ctrl.sv          uncached control region + the hardware barrier
   soc/soc_top.sv           the 4-PE SoC, coherent or non-coherent
 tb/
   models/mem_model.sv      shared data memory model with latency + backpressure
   models/core_stub.sv      core-shaped stand-in, for simulator-independent tests
   unit/tb_dcu.sv           self-checking DCU testbench
-  unit/tb_soc_mem.sv       unit tests for the SoC memories and control region
+  unit/tb_axi.sv           self-checking tests for the AXI4 fabric
   system/                  multi-core coherence and SoC testbenches
 sw/kernels/                single-PE bare-metal kernels
 sw/soc_kernels/            multi-PE bare-metal kernels
@@ -129,6 +152,12 @@ The 4-PE SoC, in both of the architectures Section IV-A compares:
 ```powershell
 powershell -File sim/run_xsim.ps1 -Tb tb_soc    -Hex sw/build/soc_par_smoke.hex
 powershell -File sim/run_xsim.ps1 -Tb tb_soc_nc -Hex sw/build/soc_par_smoke.hex
+```
+
+### The AXI fabric on its own
+
+```bash
+sim/run_iverilog.sh tb_axi       # crossbar, slaves and both master adapters
 ```
 
 ### Without Vivado
@@ -174,25 +203,38 @@ Current results:
    tb_soc_nc              not yet run
 
  Icarus Verilog (no Vivado needed)
-   tb_soc_mem             PASSED  (65 checks)
-   tb_soc_stub_nc         PASSED  (80 checks)
-   tb_soc_stub            stalls under Icarus -- see below
+   tb_axi                 PASSED  (31 checks)
+   tb_soc_stub*           do not complete under Icarus -- see below
 ```
 
-**What is and is not verified in M5.** `tb_soc_mem` covers the shared
-instruction memory under four-way contention, the shared data memory's line
-reads, word reads, byte enables and dual-ported operation, the hardware barrier
-(it must hold while any PE has not arrived and release exactly once), and the
-non-coherent data path. `tb_soc_stub_nc` then runs the whole SoC -- PEs,
-bridges, ITCMs, shared memories, control region -- as the non-coherent
-baseline, and checks the full phase-0/write/phase-2 result.
+**What is and is not verified.** `tb_axi` exercises the AXI4 fabric on its
+own: single reads and writes through the crossbar, a cache line fetched as one
+four-beat INCR burst with the lanes in the right order, byte-strobed
+write-through, the control region and its hardware barrier over AXI, two
+masters contending for one slave, and an address no slave claims -- which must
+come back `DECERR` and leave the fabric usable afterwards. That is the M5b
+deliverable and it is green.
 
-The *coherent* SoC is **not yet verified**. `tb_soc_stub` elaborates but stalls
-at its first DCU transaction under Icarus, at around cycle 5, and does so even
-built with a single PE. The same DCU and snoopy bus pass 5647 checks under
-xsim, so this looks like an Icarus limitation rather than an RTL defect -- but
-that has not been demonstrated either way, and it is recorded here as open
-until `tb_soc` and `tb_soc_stub` have been run under xsim.
+**The SoC as a whole is not verified.** Every `tb_soc*` build needs a simulator
+this machine currently lacks:
+
+* `tb_soc` / `tb_soc_nc` instantiate the real CV32E40P, which Icarus cannot
+  elaborate. They need xsim.
+* `tb_soc_stub*` replace the core with `tb/models/core_stub.sv` to get around
+  that, and they did pass before the crossbar landed. With the crossbar they
+  stop advancing simulation time once the PEs begin shared-memory traffic --
+  cycle 136 at 2 PEs, cycle 6 at 4. Time stopping rather than slowing means a
+  zero-delay loop.
+
+Three such loops were found and fixed in the crossbar while building M5b:
+`always_comb` blocks that wrote a vector both at a loop index and at an index
+carried in a signal. That is a read-modify-write of the whole vector, which
+puts the block into its own sensitivity list, so it re-triggers on its own
+writes and never settles. There is likely one more of that family in the SoC
+path. It has not been located, and whether it is a design defect or an
+Icarus-specific artefact is genuinely unresolved -- the coherent SoC stalled
+the same way *before* the crossbar existed. Recorded as open rather than
+guessed at.
 
 `tb_dcu` covers compulsory misses, hits, write-through, no-allocate, byte
 enables, snoop invalidation, the INV-before-MEM-RESP race, 2-way LRU
@@ -237,7 +279,7 @@ stores into data it has already read shows a non-zero write hit rate.
 | **M3** | 4-core coherent sub-system + version-monotonicity coherence checker | ✅ done |
 | **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ✅ done |
 | **M5** | 4-PE SoC: shared boot/data memories, control region, non-coherent baseline | 🟡 built; baseline verified, coherent build awaiting xsim |
-| **M5b** | AXI4 crossbar in place of the direct arbiters, for the Table I breakdown | ⏳ next |
+| **M5b** | AXI4 crossbar in place of the direct arbiters, for the Table I breakdown | 🟡 fabric built and verified; SoC integration unverified |
 | **M6** | Bare-metal kernels: memcpy, matrix multiply, 2-D convolution, FFT | ⏳ |
 | **M7** | Evaluation: reproduce the paper's latency, execution-time and hit-rate figures | ⏳ |
 | **M8** | Vivado synthesis and implementation, resource and power breakdown | ⏳ |
@@ -247,7 +289,7 @@ stores into data it has already read shows a non-zero write hit rate.
 
 ## Protocol issues found while building this
 
-Four real bugs the verification caught, all documented in
+Five real bugs the verification caught, all documented in
 `docs/architecture.md`:
 
 1. **Shared array read port vs. a stalled stage 2.** The Tag-RAM and Data-RAM
@@ -271,6 +313,15 @@ Four real bugs the verification caught, all documented in
    system with only one copy of the data, which is what ruled out coherence and
    pointed at the request handshake. A request must be dropped on grant, not on
    response -- the DCU proper had always done this, the baseline had not.
+5. **`always_comb` blocks that re-triggered on their own writes.** Three blocks
+   in the crossbar wrote a vector twice: once at the loop index, and once at an
+   index carried in a signal (`m_arready_o[ar_gnt_mst[s]]`). A bit-write through
+   a variable index is a read-modify-write of the whole vector, which puts the
+   vector in the block's own sensitivity list, so the block schedules itself
+   forever and simulation time stops. Each was fixed by moving the selection
+   into a per-master or per-slave generate block that assigns only local
+   scalars. Worth knowing about: it presents as a hang with no error message,
+   and the fix is structural rather than a matter of logic.
 
 A fourth, subtler one was a language trap rather than a protocol flaw: a helper
 function that read a module port directly instead of taking it as an argument
@@ -302,11 +353,17 @@ Recorded honestly as they arise; see `docs/architecture.md` for the full list.
   (write-mode)" the paper gives the Data-Bridge. Without that transfer four
   cores would spend most of their cycles arbitrating for instructions, and the
   data-cache comparison would be measuring the wrong bottleneck.
-* The interconnect is a set of round-robin arbiters in front of the shared
-  memories, not yet a true AXI crossbar. Functionally this is what the crossbar
-  does for this traffic, but the paper's Table I lists the crossbar as its own
-  resource line, so M5b replaces it with a real AXI4 crossbar before the
-  synthesis numbers are claimed as comparable.
+* The AXI4 subset implements AW/W/B/AR/R with INCR bursts, WSTRB and ID-based
+  response routing, and leaves out `AxCACHE`, `AxPROT`, `AxQOS`, `AxREGION`,
+  `AxLOCK`, `AxSIZE` and WRAP/FIXED bursts. Nothing in this SoC issues them, and
+  implementing them would add logic to the very number Table I is compared
+  against. A master may have several transactions outstanding but only to one
+  slave at a time.
+* Each PE presents three AXI masters. The paper's Fig. 1 implies two, one per
+  bridge; folding the Instruction-Bridge's fetch port and the DCU's memory port
+  together would need an extra arbiter inside the PE, and the crossbar is
+  parameterised in master count either way. This is a difference to note when
+  the crossbar's own resource line is compared with Table I.
 * The paper targets an AMD/Xilinx Virtex UltraScale+ XCVU9P at 60 MHz. This work
   targets the Zynq UltraScale+ **XCZU7EV** on a ZCU104, so absolute resource and
   frequency numbers are directional rather than a like-for-like comparison.

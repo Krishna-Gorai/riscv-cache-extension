@@ -64,14 +64,16 @@ $srcs = @(
   "$root\rtl\cache\dcu_hcl.sv",
   "$root\rtl\cache\dcu.sv",
   "$root\rtl\cache\dcu_bypass.sv",
+  "$root\rtl\axi\axi_xbar.sv",
+  "$root\rtl\axi\axi_sram.sv",
+  "$root\rtl\axi\axi_ctrl.sv",
+  "$root\rtl\axi\axi_master_simple.sv",
+  "$root\rtl\axi\axi_master_dcu.sv",
   "$root\rtl\snoop\rr_arbiter.sv",
   "$root\rtl\snoop\invalidation_table.sv",
   "$root\rtl\snoop\link_register.sv",
   "$root\rtl\snoop\snoopy_bus.sv",
   "$root\rtl\soc\coherent_subsystem.sv",
-  "$root\rtl\soc\shared_data_mem.sv",
-  "$root\rtl\soc\shared_instr_mem.sv",
-  "$root\rtl\soc\soc_ctrl.sv",
   "$root\rtl\pe\bridge_router.sv",
   "$root\rtl\pe\itcm.sv",
   "$root\rtl\pe\instr_bridge.sv",
@@ -81,10 +83,15 @@ $srcs = @(
   "$root\tb\models\mem_model.sv",
   "$root\tb\models\shared_mem_model.sv",
   "$root\tb\unit\tb_dcu.sv",
+  "$root\tb\unit\tb_axi.sv",
   "$root\tb\system\tb_coherent_subsystem.sv",
   "$root\tb\system\tb_pe.sv",
   "$root\tb\system\tb_soc.sv"
 ) | Where-Object { Test-Path $_ }
+
+# tb/models/core_stub.sv is deliberately absent: it defines a module called
+# cv32e40p_top so that Icarus can build the SoC without the real core, and
+# compiling it here would collide with the submodule.
 
 # The PE testbenches need the core; the cache-only ones do not.
 $needCore = @("tb_pe", "tb_soc", "tb_soc_nc") -contains $Tb

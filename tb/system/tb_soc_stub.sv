@@ -193,8 +193,18 @@ module tb_soc_stub_nc;
   soc_stub_harness #(.Coherent(1'b0), .Label("tb_soc_stub_nc [non-coherent]")) h ();
 endmodule
 
-// A single-PE coherent build, used to tell an arbitration problem apart from
-// one in the cache itself.
+// Single-PE builds, used to tell an arbitration or scale problem apart from
+// one in the data path itself.
+module tb_soc_stub_2pe_nc;
+  soc_stub_harness #(.Coherent(1'b0), .Label("tb_soc_stub_2pe_nc [non-coherent, 2 PE]"),
+                     .NumPes(2)) h ();
+endmodule
+
+module tb_soc_stub_1pe_nc;
+  soc_stub_harness #(.Coherent(1'b0), .Label("tb_soc_stub_1pe_nc [non-coherent, 1 PE]"),
+                     .NumPes(1)) h ();
+endmodule
+
 module tb_soc_stub_1pe;
   soc_stub_harness #(.Coherent(1'b1), .Label("tb_soc_stub_1pe [coherent, 1 PE]"),
                      .NumPes(1)) h ();
