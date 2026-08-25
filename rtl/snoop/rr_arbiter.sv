@@ -31,11 +31,10 @@ module rr_arbiter #(
     gnt_valid_o = 1'b0;
     gnt_idx_o   = '0;
     for (int unsigned i = 0; i < NumReq; i++) begin
-      automatic int unsigned k = (int'(ptr_q) + i) % NumReq;
-      if (!gnt_valid_o && req_i[k]) begin
+      if (!gnt_valid_o && req_i[(int'(ptr_q) + i) % NumReq]) begin
         gnt_valid_o = 1'b1;
-        gnt_idx_o   = IdxW'(k);
-        gnt_o[k]    = 1'b1;
+        gnt_idx_o   = IdxW'((int'(ptr_q) + i) % NumReq);
+        gnt_o[(int'(ptr_q) + i) % NumReq] = 1'b1;
       end
     end
   end

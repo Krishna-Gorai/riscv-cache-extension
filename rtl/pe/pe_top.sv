@@ -45,12 +45,22 @@ module pe_top
   input  logic                 dcu_rvalid_i,
   input  logic [DataW-1:0]     dcu_rdata_i,
 
-  // --- shared instruction memory port ---------------------------------------
-  output logic                 simem_req_o,
-  input  logic                 simem_gnt_i,
-  output logic [AddrW-1:0]     simem_addr_o,
-  input  logic                 simem_rvalid_i,
-  input  logic [DataW-1:0]     simem_rdata_i,
+  // --- shared instruction memory, fetch side (Instruction-Bridge) -----------
+  output logic                 simem_i_req_o,
+  input  logic                 simem_i_gnt_i,
+  output logic [AddrW-1:0]     simem_i_addr_o,
+  input  logic                 simem_i_rvalid_i,
+  input  logic [DataW-1:0]     simem_i_rdata_i,
+
+  // --- shared instruction memory, data side (Data-Bridge) -------------------
+  //  The boot stub reads the code image through this port and writes it into
+  //  the ITCM: the "instructions transfer from the shared instruction memory
+  //  to the ITCM (write-mode)" of Section III-B.
+  output logic                 simem_d_req_o,
+  input  logic                 simem_d_gnt_i,
+  output logic [AddrW-1:0]     simem_d_addr_o,
+  input  logic                 simem_d_rvalid_i,
+  input  logic [DataW-1:0]     simem_d_rdata_i,
 
   // --- uncached control region ----------------------------------------------
   output logic                 ctrl_req_o,
@@ -64,6 +74,12 @@ module pe_top
 
   output logic                 core_sleep_o
 );
+
+  // CV32E40P issues no atomics, so the qualifier is a constant. It goes
+  // through a typed net rather than straight from the enum literal to the
+  // port, which some simulators size as a single bit.
+  amo_e amo_none;
+  assign amo_none = AMO_NONE;
 
   // --- core <-> bridges -------------------------------------------------------
   logic             instr_req, instr_gnt, instr_rvalid;
@@ -181,11 +197,11 @@ module pe_top
     .itcm_rvalid_i  (itcm_i_rvalid),
     .itcm_rdata_i   (itcm_i_rdata),
 
-    .simem_req_o    (simem_req_o),
-    .simem_gnt_i    (simem_gnt_i),
-    .simem_addr_o   (simem_addr_o),
-    .simem_rvalid_i (simem_rvalid_i),
-    .simem_rdata_i  (simem_rdata_i)
+    .simem_req_o    (simem_i_req_o),
+    .simem_gnt_i    (simem_i_gnt_i),
+    .simem_addr_o   (simem_i_addr_o),
+    .simem_rvalid_i (simem_i_rvalid_i),
+    .simem_rdata_i  (simem_i_rdata_i)
   );
 
   // ---------------------------------------------------------------------------
@@ -210,7 +226,7 @@ module pe_top
     .core_wdata_i  (data_wdata),
     .core_rvalid_o (data_rvalid),
     .core_rdata_o  (data_rdata),
-    .core_amo_i    (AMO_NONE),
+    .core_amo_i    (amo_none),
 
     .dcu_req_o     (dcu_req_o),
     .dcu_gnt_i     (dcu_gnt_i),
@@ -230,6 +246,12 @@ module pe_top
     .itcm_wdata_o  (itcm_d_wdata),
     .itcm_rvalid_i (itcm_d_rvalid),
     .itcm_rdata_i  (itcm_d_rdata),
+
+    .simem_req_o   (simem_d_req_o),
+    .simem_gnt_i   (simem_d_gnt_i),
+    .simem_addr_o  (simem_d_addr_o),
+    .simem_rvalid_i(simem_d_rvalid_i),
+    .simem_rdata_i (simem_d_rdata_i),
 
     .ctrl_req_o    (ctrl_req_o),
     .ctrl_gnt_i    (ctrl_gnt_i),

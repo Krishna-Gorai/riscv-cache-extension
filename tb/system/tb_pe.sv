@@ -41,18 +41,33 @@ module tb_pe;
   amo_e                 dcu_amo;
 
   // ---------------------------------------------------------------------------
-  //  PE <-> shared instruction memory (unused in M4, kept from hanging)
+  //  PE <-> shared instruction memory.
+  //
+  //  A single PE boots straight out of its ITCM, so neither the fetch side nor
+  //  the Data-Bridge side is used here. Both are still handshaked so that a
+  //  stray access is absorbed rather than hanging the core.
   // ---------------------------------------------------------------------------
-  logic             simem_req, simem_gnt, simem_rvalid;
-  logic [AddrW-1:0] simem_addr;
-  logic [DataW-1:0] simem_rdata;
+  logic             simem_i_req, simem_i_gnt, simem_i_rvalid;
+  logic [AddrW-1:0] simem_i_addr;
+  logic [DataW-1:0] simem_i_rdata;
 
-  assign simem_gnt = simem_req;
+  logic             simem_d_req, simem_d_gnt, simem_d_rvalid;
+  logic [AddrW-1:0] simem_d_addr;
+  logic [DataW-1:0] simem_d_rdata;
+
+  assign simem_i_gnt = simem_i_req;
+  assign simem_d_gnt = simem_d_req;
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) simem_rvalid <= 1'b0;
-    else        simem_rvalid <= simem_gnt;
+    if (!rst_n) begin
+      simem_i_rvalid <= 1'b0;
+      simem_d_rvalid <= 1'b0;
+    end else begin
+      simem_i_rvalid <= simem_i_gnt;
+      simem_d_rvalid <= simem_d_gnt;
+    end
   end
-  assign simem_rdata = '0;
+  assign simem_i_rdata = '0;
+  assign simem_d_rdata = '0;
 
   // ---------------------------------------------------------------------------
   //  PE <-> uncached control region
@@ -118,11 +133,17 @@ module tb_pe;
     .dcu_rvalid_i   (dcu_rvalid),
     .dcu_rdata_i    (dcu_rdata),
 
-    .simem_req_o    (simem_req),
-    .simem_gnt_i    (simem_gnt),
-    .simem_addr_o   (simem_addr),
-    .simem_rvalid_i (simem_rvalid),
-    .simem_rdata_i  (simem_rdata),
+    .simem_i_req_o    (simem_i_req),
+    .simem_i_gnt_i    (simem_i_gnt),
+    .simem_i_addr_o   (simem_i_addr),
+    .simem_i_rvalid_i (simem_i_rvalid),
+    .simem_i_rdata_i  (simem_i_rdata),
+
+    .simem_d_req_o    (simem_d_req),
+    .simem_d_gnt_i    (simem_d_gnt),
+    .simem_d_addr_o   (simem_d_addr),
+    .simem_d_rvalid_i (simem_d_rvalid),
+    .simem_d_rdata_i  (simem_d_rdata),
 
     .ctrl_req_o     (ctrl_req),
     .ctrl_gnt_i     (ctrl_gnt),

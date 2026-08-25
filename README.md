@@ -84,16 +84,25 @@ rtl/
   cache/cache_ram.sv       dual-port RAM primitive with collision bypass
   cache/dcu_hcl.sv         Hit Check Logic
   cache/dcu.sv             Data Cache Unit (stages, CCL, SCL, arrays)
+  cache/dcu_bypass.sv      the non-coherent baseline: a PE with no data cache
   snoop/                   snoopy bus: arbiters, link register, inv. table
   pe/                      data bridge, instruction bridge, ITCM, PE top
-  soc/                     AXI crossbar wiring, shared memories, SoC top
+  soc/coherent_subsystem.sv  NumCores DCUs + the snoopy bus
+  soc/shared_data_mem.sv   dual-ported scratchpad, line reads and word reads
+  soc/shared_instr_mem.sv  multi-port boot memory
+  soc/soc_ctrl.sv          uncached control region + the hardware barrier
+  soc/soc_top.sv           the 4-PE SoC, coherent or non-coherent
 tb/
   models/mem_model.sv      shared data memory model with latency + backpressure
+  models/core_stub.sv      core-shaped stand-in, for simulator-independent tests
   unit/tb_dcu.sv           self-checking DCU testbench
-  system/                  multi-core coherence testbenches
-sw/                        bare-metal benchmark kernels
+  unit/tb_soc_mem.sv       unit tests for the SoC memories and control region
+  system/                  multi-core coherence and SoC testbenches
+sw/kernels/                single-PE bare-metal kernels
+sw/soc_kernels/            multi-PE bare-metal kernels
 fpga/                      Vivado synthesis and implementation scripts
 sim/run_xsim.ps1           compile + run any testbench with Vivado xsim
+sim/run_iverilog.sh        run the simulator-independent subset with Icarus
 docs/                      architecture notes, protocol description, results
 ```
 
@@ -115,6 +124,30 @@ powershell -File sim/run_xsim.ps1 -Tb tb_coherent_subsystem
 powershell -File sim/run_xsim.ps1 -Tb tb_pe -Hex sw/build/smoke.hex
 ```
 
+The 4-PE SoC, in both of the architectures Section IV-A compares:
+
+```powershell
+powershell -File sim/run_xsim.ps1 -Tb tb_soc    -Hex sw/build/soc_par_smoke.hex
+powershell -File sim/run_xsim.ps1 -Tb tb_soc_nc -Hex sw/build/soc_par_smoke.hex
+```
+
+### Without Vivado
+
+Three testbenches avoid the constructs Icarus Verilog does not implement, so
+the SoC and its coherence behaviour can be checked with an open-source
+toolchain alone:
+
+```bash
+sim/run_iverilog.sh                # tb_soc_mem, tb_soc_stub_nc, tb_soc_stub
+```
+
+`tb_soc_stub` builds the complete SoC with `tb/models/core_stub.sv` compiled in
+place of the CV32E40P. The stub is not a RISC-V core: it drives the data port
+through the same phase pattern as the compiled kernel, so the integration and
+the coherence result are exercised without a simulator that can elaborate the
+real core. `tb_dcu`, `tb_coherent_subsystem`, `tb_pe` and `tb_soc` still need
+xsim.
+
 Clone with the submodule, since `tb_pe` needs the core:
 
 ```
@@ -133,10 +166,33 @@ TOOLCHAIN=/path/to/bin ./build.sh       # to point at your own toolchain
 Current results:
 
 ```
- tb_dcu                 PASSED  (2544 checks)
- tb_coherent_subsystem  PASSED  (3103 checks)
- tb_pe                  PASSED  (5 checks)
+ xsim (reference simulator)
+   tb_dcu                 PASSED  (2544 checks)
+   tb_coherent_subsystem  PASSED  (3103 checks)
+   tb_pe                  PASSED  (5 checks)
+   tb_soc                 not yet run
+   tb_soc_nc              not yet run
+
+ Icarus Verilog (no Vivado needed)
+   tb_soc_mem             PASSED  (65 checks)
+   tb_soc_stub_nc         PASSED  (80 checks)
+   tb_soc_stub            stalls under Icarus -- see below
 ```
+
+**What is and is not verified in M5.** `tb_soc_mem` covers the shared
+instruction memory under four-way contention, the shared data memory's line
+reads, word reads, byte enables and dual-ported operation, the hardware barrier
+(it must hold while any PE has not arrived and release exactly once), and the
+non-coherent data path. `tb_soc_stub_nc` then runs the whole SoC -- PEs,
+bridges, ITCMs, shared memories, control region -- as the non-coherent
+baseline, and checks the full phase-0/write/phase-2 result.
+
+The *coherent* SoC is **not yet verified**. `tb_soc_stub` elaborates but stalls
+at its first DCU transaction under Icarus, at around cycle 5, and does so even
+built with a single PE. The same DCU and snoopy bus pass 5647 checks under
+xsim, so this looks like an Icarus limitation rather than an RTL defect -- but
+that has not been demonstrated either way, and it is recorded here as open
+until `tb_soc` and `tb_soc_stub` have been run under xsim.
 
 `tb_dcu` covers compulsory misses, hits, write-through, no-allocate, byte
 enables, snoop invalidation, the INV-before-MEM-RESP race, 2-way LRU
@@ -180,7 +236,8 @@ stores into data it has already read shows a non-zero write hit rate.
 | **M2** | Snoopy bus: round-robin arbiters, Link Register, Invalidation Table | ✅ done |
 | **M3** | 4-core coherent sub-system + version-monotonicity coherence checker | ✅ done |
 | **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ✅ done |
-| **M5** | 4-PE SoC over an AXI crossbar, plus a non-coherent baseline variant | ⏳ next |
+| **M5** | 4-PE SoC: shared boot/data memories, control region, non-coherent baseline | 🟡 built; baseline verified, coherent build awaiting xsim |
+| **M5b** | AXI4 crossbar in place of the direct arbiters, for the Table I breakdown | ⏳ next |
 | **M6** | Bare-metal kernels: memcpy, matrix multiply, 2-D convolution, FFT | ⏳ |
 | **M7** | Evaluation: reproduce the paper's latency, execution-time and hit-rate figures | ⏳ |
 | **M8** | Vivado synthesis and implementation, resource and power breakdown | ⏳ |
@@ -190,7 +247,7 @@ stores into data it has already read shows a non-zero write hit rate.
 
 ## Protocol issues found while building this
 
-Three real bugs the verification caught, all documented in
+Four real bugs the verification caught, all documented in
 `docs/architecture.md`:
 
 1. **Shared array read port vs. a stalled stage 2.** The Tag-RAM and Data-RAM
@@ -206,6 +263,14 @@ Three real bugs the verification caught, all documented in
 3. **A failed store-conditional released another core's reservation.** There is
    a single Link Register for the whole cluster, so an SC may only consume the
    reservation if it is the one that owns it.
+4. **The non-coherent baseline never withdrew a granted request.** `dcu_bypass`
+   held `mem_rd_req` asserted from issue until the response arrived, so the
+   memory re-granted the same still-asserted request on later cycles and the
+   surplus reads returned their data into whatever transaction was outstanding
+   by then. It showed up as checksums that were wrong in *both* directions in a
+   system with only one copy of the data, which is what ruled out coherence and
+   pointed at the request handshake. A request must be dropped on grant, not on
+   response -- the DCU proper had always done this, the baseline had not.
 
 A fourth, subtler one was a language trap rather than a protocol flaw: a helper
 function that read a module port directly instead of taking it as an argument
@@ -226,8 +291,22 @@ Recorded honestly as they arise; see `docs/architecture.md` for the full list.
   the two pipeline stages.
 * CV32E40P does not implement the A extension, so `lr.w` / `sc.w` cannot be
   issued by the core directly. The Link Register and exclusive-bit hardware is
-  built and verified as specified; how software reaches it is decided at M4 and
-  will be documented rather than quietly dropped.
+  built and verified as specified by `tb_coherent_subsystem`, but no core in
+  this SoC can reach it. Multi-PE software therefore synchronises through a
+  hardware barrier in the uncached control region, which counts arrivals one
+  per cycle behind its arbiter and so is atomic by construction. The paper's
+  LR/SC path implies CV32E40X and its eXtension interface.
+* The paper's PEs boot from the shared instruction memory. They do so here too,
+  but each PE then copies its code into its private ITCM and jumps there --
+  the "instructions transfer from the shared instruction memory to the ITCM
+  (write-mode)" the paper gives the Data-Bridge. Without that transfer four
+  cores would spend most of their cycles arbitrating for instructions, and the
+  data-cache comparison would be measuring the wrong bottleneck.
+* The interconnect is a set of round-robin arbiters in front of the shared
+  memories, not yet a true AXI crossbar. Functionally this is what the crossbar
+  does for this traffic, but the paper's Table I lists the crossbar as its own
+  resource line, so M5b replaces it with a real AXI4 crossbar before the
+  synthesis numbers are claimed as comparable.
 * The paper targets an AMD/Xilinx Virtex UltraScale+ XCVU9P at 60 MHz. This work
   targets the Zynq UltraScale+ **XCZU7EV** on a ZCU104, so absolute resource and
   frequency numbers are directional rather than a like-for-like comparison.

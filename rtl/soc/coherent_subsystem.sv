@@ -77,7 +77,17 @@ module coherent_subsystem
   for (genvar c = 0; c < NumCores; c++) begin : g_dcu
     amo_e dcu_amo;
     amo_e dcu_snp_amo;
-    assign dcu_amo                 = amo_e'(core_amo_i[c*2 +: 2]);
+    // Decode the qualifier off the packed multi-core bus. Written as an
+    // explicit mapping rather than an enum cast: the two are equivalent, and
+    // the mapping elaborates on simulators that do not implement enum casts.
+    always_comb begin
+      case (core_amo_i[c*2 +: 2])
+        2'd1:    dcu_amo = AMO_LR;
+        2'd2:    dcu_amo = AMO_SC;
+        default: dcu_amo = AMO_NONE;
+      endcase
+    end
+
     assign snp_amo[c*2 +: 2]       = dcu_snp_amo;
 
     dcu #(

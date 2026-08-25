@@ -68,15 +68,15 @@ module snoopy_bus
   //  Request classification
   // ---------------------------------------------------------------------------
   logic [NumCores-1:0] is_write, is_read, is_lr, is_sc;
-  amo_e                amo [NumCores];
 
+  // The qualifier is only ever compared, so the raw slice off the packed bus
+  // is matched against the enum values directly rather than cast first.
   always_comb begin
     for (int unsigned c = 0; c < NumCores; c++) begin
-      amo[c]      = amo_e'(amo_i[c*2 +: 2]);
       is_write[c] = req_i[c] &&  is_inv_i[c];
       is_read[c]  = req_i[c] && !is_inv_i[c];
-      is_lr[c]    = is_read[c]  && (amo[c] == AMO_LR);
-      is_sc[c]    = is_write[c] && (amo[c] == AMO_SC);
+      is_lr[c]    = is_read[c]  && (amo_i[c*2 +: 2] == AMO_LR);
+      is_sc[c]    = is_write[c] && (amo_i[c*2 +: 2] == AMO_SC);
     end
   end
 

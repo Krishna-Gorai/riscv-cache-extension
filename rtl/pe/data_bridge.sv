@@ -11,6 +11,8 @@
 //  It is the address decoder of the core data port and routes an access to
 //    * the coherent shared data memory, through the private DCU
 //    * the local ITCM write port, when loading code
+//    * the shared instruction memory, read-only, which is where that code is
+//      read from during the boot-time transfer into the ITCM
 //    * an uncached control region, used by the testbenches for the exit
 //      handshake and character output
 //
@@ -25,6 +27,7 @@ module data_bridge
   parameter  int unsigned DataW     = 32,
   parameter  logic [3:0]  ItcmNib   = 4'h0,   // 0x0xxx_xxxx -> local ITCM
   parameter  logic [3:0]  SdmemNib  = 4'h1,   // 0x1xxx_xxxx -> coherent shared data
+  parameter  logic [3:0]  SimemNib  = 4'h2,   // 0x2xxx_xxxx -> shared instruction mem
   parameter  logic [3:0]  CtrlNib   = 4'h8,   // 0x8xxx_xxxx -> uncached control
 
   localparam int unsigned WordBytes = DataW / 8
@@ -66,6 +69,13 @@ module data_bridge
   input  logic                 itcm_rvalid_i,
   input  logic [DataW-1:0]     itcm_rdata_i,
 
+  // shared instruction memory, read side -- boot-time code transfer
+  output logic                 simem_req_o,
+  input  logic                 simem_gnt_i,
+  output logic [AddrW-1:0]     simem_addr_o,
+  input  logic                 simem_rvalid_i,
+  input  logic [DataW-1:0]     simem_rdata_i,
+
   // uncached control region
   output logic                 ctrl_req_o,
   input  logic                 ctrl_gnt_i,
@@ -77,7 +87,8 @@ module data_bridge
   input  logic [DataW-1:0]     ctrl_rdata_i
 );
 
-  localparam int unsigned NumTgt = 3;   // 0 = DCU, 1 = ITCM, 2 = control
+  // 0 = DCU, 1 = ITCM, 2 = control, 3 = shared instruction memory
+  localparam int unsigned NumTgt = 4;
 
   logic [NumTgt-1:0]       sel;
   logic [NumTgt-1:0]       dn_req, dn_gnt, dn_rvalid;
@@ -89,6 +100,7 @@ module data_bridge
       SdmemNib: sel[0] = 1'b1;
       ItcmNib:  sel[1] = 1'b1;
       CtrlNib:  sel[2] = 1'b1;
+      SimemNib: sel[3] = 1'b1;
       default:  sel    = '0;
     endcase
   end
@@ -96,6 +108,7 @@ module data_bridge
   assign dcu_req_o    = dn_req[0];
   assign itcm_req_o   = dn_req[1];
   assign ctrl_req_o   = dn_req[2];
+  assign simem_req_o  = dn_req[3];
 
   // The payload is simply broadcast; only the selected target ever samples it.
   assign dcu_addr_o   = core_addr_i;
@@ -114,9 +127,13 @@ module data_bridge
   assign ctrl_be_o    = core_be_i;
   assign ctrl_wdata_o = core_wdata_i;
 
-  assign dn_gnt    = {ctrl_gnt_i,    itcm_gnt_i,    dcu_gnt_i};
-  assign dn_rvalid = {ctrl_rvalid_i, itcm_rvalid_i, dcu_rvalid_i};
-  assign dn_rdata  = {ctrl_rdata_i,  itcm_rdata_i,  dcu_rdata_i};
+  // The shared instruction memory is read-only; a store that lands there is
+  // handshaked and discarded rather than deadlocking the core.
+  assign simem_addr_o = core_addr_i;
+
+  assign dn_gnt    = {simem_gnt_i,    ctrl_gnt_i,    itcm_gnt_i,    dcu_gnt_i};
+  assign dn_rvalid = {simem_rvalid_i, ctrl_rvalid_i, itcm_rvalid_i, dcu_rvalid_i};
+  assign dn_rdata  = {simem_rdata_i,  ctrl_rdata_i,  itcm_rdata_i,  dcu_rdata_i};
 
   bridge_router #(
     .NumTgt (NumTgt),

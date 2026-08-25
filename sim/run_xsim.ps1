@@ -4,6 +4,8 @@
 #  Usage:  powershell -File sim/run_xsim.ps1 -Tb tb_dcu
 #          powershell -File sim/run_xsim.ps1 -Tb tb_coherent_subsystem
 #          powershell -File sim/run_xsim.ps1 -Tb tb_pe -Hex sw/build/smoke.hex
+#          powershell -File sim/run_xsim.ps1 -Tb tb_soc    -Hex sw/build/soc_par_smoke.hex
+#          powershell -File sim/run_xsim.ps1 -Tb tb_soc_nc -Hex sw/build/soc_par_smoke.hex
 #          add -Wave to log every signal for waveform inspection
 # =============================================================================
 param(
@@ -61,11 +63,15 @@ $srcs = @(
   "$root\rtl\cache\cache_ram.sv",
   "$root\rtl\cache\dcu_hcl.sv",
   "$root\rtl\cache\dcu.sv",
+  "$root\rtl\cache\dcu_bypass.sv",
   "$root\rtl\snoop\rr_arbiter.sv",
   "$root\rtl\snoop\invalidation_table.sv",
   "$root\rtl\snoop\link_register.sv",
   "$root\rtl\snoop\snoopy_bus.sv",
   "$root\rtl\soc\coherent_subsystem.sv",
+  "$root\rtl\soc\shared_data_mem.sv",
+  "$root\rtl\soc\shared_instr_mem.sv",
+  "$root\rtl\soc\soc_ctrl.sv",
   "$root\rtl\pe\bridge_router.sv",
   "$root\rtl\pe\itcm.sv",
   "$root\rtl\pe\instr_bridge.sv",
@@ -81,7 +87,7 @@ $srcs = @(
 ) | Where-Object { Test-Path $_ }
 
 # The PE testbenches need the core; the cache-only ones do not.
-$needCore = @("tb_pe", "tb_soc") -contains $Tb
+$needCore = @("tb_pe", "tb_soc", "tb_soc_nc") -contains $Tb
 $allSrcs  = if ($needCore) { $cvSrcs + $srcs } else { $srcs }
 $allIncs  = if ($needCore) { $incdirs } else { @() }
 
