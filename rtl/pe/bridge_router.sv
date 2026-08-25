@@ -60,7 +60,7 @@ module bridge_router #(
   // --- downstream requests ----------------------------------------------------
   assign dn_req_o = up_sel_i & {NumTgt{up_req_i && can_issue}};
 
-  always_comb begin
+  always @(*) begin
     up_gnt_o = void_gnt;
     for (int unsigned t = 0; t < NumTgt; t++) begin
       if (up_sel_i[t] && dn_gnt_i[t] && up_req_i && can_issue) up_gnt_o = 1'b1;
@@ -68,7 +68,7 @@ module bridge_router #(
   end
 
   // --- responses --------------------------------------------------------------
-  always_comb begin
+  always @(*) begin
     up_rvalid_o = void_rvalid_q;
     up_rdata_o  = '0;
     for (int unsigned t = 0; t < NumTgt; t++) begin

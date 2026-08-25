@@ -204,37 +204,35 @@ Current results:
 
  Icarus Verilog (no Vivado needed)
    tb_axi                 PASSED  (31 checks)
-   tb_soc_stub*           do not complete under Icarus -- see below
+   tb_soc_stub_nc         PASSED  (80 checks)   4 PEs, non-coherent
+   tb_soc_stub            PASSED  (80 checks)   4 PEs, coherent
 ```
 
-**What is and is not verified.** `tb_axi` exercises the AXI4 fabric on its
-own: single reads and writes through the crossbar, a cache line fetched as one
-four-beat INCR burst with the lanes in the right order, byte-strobed
-write-through, the control region and its hardware barrier over AXI, two
-masters contending for one slave, and an address no slave claims -- which must
-come back `DECERR` and leave the fabric usable afterwards. That is the M5b
-deliverable and it is green.
+**First coherent vs non-coherent measurement.** Both builds run the same
+program on the same SoC; the only difference is whether the DCUs are there:
 
-**The SoC as a whole is not verified.** Every `tb_soc*` build needs a simulator
-this machine currently lacks:
+| 4-PE SoC over the AXI crossbar | cycles | read hit | write hit | average |
+|---|---|---|---|---|
+| **coherent** (private DCUs + snoopy bus) | **1291** | 85.42 % | 84.21 % | 85.31 % |
+| non-coherent (no data cache) | 3358 | – | – | – |
 
-* `tb_soc` / `tb_soc_nc` instantiate the real CV32E40P, which Icarus cannot
-  elaborate. They need xsim.
-* `tb_soc_stub*` replace the core with `tb/models/core_stub.sv` to get around
-  that, and they did pass before the crossbar landed. With the crossbar they
-  stop advancing simulation time once the PEs begin shared-memory traffic --
-  cycle 136 at 2 PEs, cycle 6 at 4. Time stopping rather than slowing means a
-  zero-delay loop.
+That is a **2.6x speedup** from the cache sub-system, and the hit rates are in
+the band Fig. 7 reports (90–96 % there, on much larger kernels with more reuse
+than this bring-up kernel has). The write hit rate is high here, rather than
+the 0 % `tb_pe` reports, because this kernel reads the array before writing it:
+under write-through / no-allocate a store only hits if the line is already
+resident, which is exactly the distinction Fig. 7 is drawing.
 
-Three such loops were found and fixed in the crossbar while building M5b:
-`always_comb` blocks that wrote a vector both at a loop index and at an index
-carried in a signal. That is a read-modify-write of the whole vector, which
-puts the block into its own sensitivity list, so it re-triggers on its own
-writes and never settles. There is likely one more of that family in the SoC
-path. It has not been located, and whether it is a design defect or an
-Icarus-specific artefact is genuinely unresolved -- the coherent SoC stalled
-the same way *before* the crossbar existed. Recorded as open rather than
-guessed at.
+These are not yet the paper's figures -- that is M6/M7, with memcpy, matrix
+multiply, convolution and FFT -- but the machinery now produces them.
+
+**What still needs xsim.** `tb_dcu` and `tb_coherent_subsystem` use `break` and
+procedural `automatic` in their stimulus; `tb_pe` and `tb_soc` instantiate the
+real CV32E40P, which Icarus cannot elaborate. The SoC results above come from
+`tb/models/core_stub.sv`, a core-shaped stand-in that drives the same access
+pattern as the compiled kernel -- so they verify the cache sub-system, the
+bridges, the crossbar and the coherence result, but not the CV32E40P
+integration.
 
 `tb_dcu` covers compulsory misses, hits, write-through, no-allocate, byte
 enables, snoop invalidation, the INV-before-MEM-RESP race, 2-way LRU
@@ -278,8 +276,8 @@ stores into data it has already read shows a non-zero write hit rate.
 | **M2** | Snoopy bus: round-robin arbiters, Link Register, Invalidation Table | ✅ done |
 | **M3** | 4-core coherent sub-system + version-monotonicity coherence checker | ✅ done |
 | **M4** | One PE: CV32E40P + Data-Bridge + Instruction-Bridge + ITCM | ✅ done |
-| **M5** | 4-PE SoC: shared boot/data memories, control region, non-coherent baseline | 🟡 built; baseline verified, coherent build awaiting xsim |
-| **M5b** | AXI4 crossbar in place of the direct arbiters, for the Table I breakdown | 🟡 fabric built and verified; SoC integration unverified |
+| **M5** | 4-PE SoC: shared boot/data memories, control region, non-coherent baseline | ✅ done |
+| **M5b** | AXI4 crossbar in place of the direct arbiters, for the Table I breakdown | ✅ done |
 | **M6** | Bare-metal kernels: memcpy, matrix multiply, 2-D convolution, FFT | ⏳ |
 | **M7** | Evaluation: reproduce the paper's latency, execution-time and hit-rate figures | ⏳ |
 | **M8** | Vivado synthesis and implementation, resource and power breakdown | ⏳ |
@@ -313,7 +311,26 @@ Five real bugs the verification caught, all documented in
    system with only one copy of the data, which is what ruled out coherence and
    pointed at the request handshake. A request must be dropped on grant, not on
    response -- the DCU proper had always done this, the baseline had not.
-5. **`always_comb` blocks that re-triggered on their own writes.** Three blocks
+5. **Simulation time freezing, with no error, in four different places.**
+   Icarus Verilog derives an `always_comb` sensitivity list from every signal
+   the block *references*, including ones it only ever writes. A block that
+   clears a vector and then conditionally sets part of it therefore schedules
+   itself again on its own writes and never settles, and the whole simulation
+   stops advancing time. It is a nasty one to chase because a protocol deadlock
+   still advances the clock, whereas this does not -- and because it is
+   invisible to a VCD, since the block keeps assigning the *same* values.
+
+   What finally located it: hierarchical `always @(signal) $display(...)`
+   monitors placed in the testbench. Those add readers without altering any
+   combinational block, unlike a `$display` inside the block itself, which
+   perturbs the very scheduling under investigation. The monitors showed one
+   arbiter re-evaluating thousands of times at a frozen timestamp while every
+   one of its inputs was provably quiet -- and a pure function of stable inputs
+   cannot change, so the design was not at fault. Switching those blocks to
+   `always @(*)`, whose sensitivity comes from reads alone, fixed it. The two
+   forms are identical for synthesis.
+
+6. **`always_comb` blocks that re-triggered on their own writes.** Three blocks
    in the crossbar wrote a vector twice: once at the loop index, and once at an
    index carried in a signal (`m_arready_o[ar_gnt_mst[s]]`). A bit-write through
    a variable index is a read-modify-write of the whole vector, which puts the

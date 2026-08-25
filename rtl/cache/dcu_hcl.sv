@@ -19,7 +19,7 @@ module dcu_hcl #(
   output logic [NumWays-1:0]      hit_vec_o
 );
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned w = 0; w < NumWays; w++) begin
       hit_vec_o[w] = valid_i[w] && (tags_i[w*TagW +: TagW] == tag_i);
     end
@@ -27,7 +27,7 @@ module dcu_hcl #(
 
   assign hit_o = |hit_vec_o;
 
-  always_comb begin
+  always @(*) begin
     hit_way_o = '0;
     for (int unsigned w = 0; w < NumWays; w++) begin
       if (hit_vec_o[w]) hit_way_o = WayW'(w);
@@ -36,7 +36,7 @@ module dcu_hcl #(
 
 `ifndef SYNTHESIS
   // A correctly maintained cache never holds the same tag in two ways.
-  always_comb begin
+  always @(*) begin
     if ($countones(hit_vec_o) > 1) begin
       $error("dcu_hcl: multi-way hit (tag=%0h valid=%0b)", tag_i, valid_i);
     end

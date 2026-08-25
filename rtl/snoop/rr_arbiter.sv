@@ -26,7 +26,7 @@ module rr_arbiter #(
 
   logic [IdxW-1:0] ptr_q;
 
-  always_comb begin
+  always @(*) begin
     gnt_o       = '0;
     gnt_valid_o = 1'b0;
     gnt_idx_o   = '0;

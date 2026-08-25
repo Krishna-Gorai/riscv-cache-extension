@@ -58,7 +58,7 @@ module shared_mem_model #(
   logic                wsel_valid;
   logic [PortW-1:0]    wsel_idx;
 
-  always_comb begin
+  always @(*) begin
     wsel       = '0;
     wsel_valid = 1'b0;
     wsel_idx   = '0;
@@ -101,7 +101,7 @@ module shared_mem_model #(
   logic [AddrW-1:0]    raddr_q;
   int unsigned         rcnt_q;
 
-  always_comb begin
+  always @(*) begin
     rsel       = '0;
     rsel_valid = 1'b0;
     rsel_idx   = '0;

@@ -56,7 +56,7 @@ module tb_coherent_subsystem;
   logic [NumCores*DataW-1:0]     core_wdata, core_rdata;
   logic [NumCores*2-1:0]         core_amo;
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned c = 0; c < NumCores; c++) begin
       core_req[c]                       = t_req[c];
       core_we[c]                        = t_we[c];

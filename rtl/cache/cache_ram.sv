@@ -51,7 +51,7 @@ module cache_ram #(
 
   // Registered collision bypass: a granule written in the same cycle the read
   // was issued is forwarded instead of the (stale) array output.
-  always_comb begin
+  always @(*) begin
     for (int unsigned g = 0; g < Granules; g++) begin
       rdata_o[g*Width +: Width] = coll_q[g] ? wdata_q[g*Width +: Width]
                                             : rdata_q[g*Width +: Width];

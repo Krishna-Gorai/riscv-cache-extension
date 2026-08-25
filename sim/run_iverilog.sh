@@ -9,28 +9,20 @@
 #
 #    tb_axi           the AXI4 fabric on its own: crossbar, SRAM slave,
 #                     control slave, and both master adapters
+#    tb_soc_stub      the whole coherent SoC over the crossbar, with
+#                     tb/models/core_stub.sv in place of the CV32E40P
+#    tb_soc_stub_nc   the same SoC built as the non-coherent baseline
 #
-#  KNOWN LIMITATION -- the SoC builds do not complete under Icarus. With the
-#  crossbar in place, tb_soc_stub_2pe_nc advances normally until the PEs start
-#  their shared-memory traffic (around cycle 136) and then stops advancing
-#  simulation time altogether; the 4-PE build stops at cycle 6. Time stopping
-#  rather than merely crawling means a zero-delay loop, not a protocol
-#  deadlock. Three such loops were already found and fixed in the crossbar --
-#  always_comb blocks that wrote a vector both at a loop index and at an index
-#  carried in a signal, which makes the block re-trigger on its own writes --
-#  so there is likely one more of that family somewhere in the SoC path. It has
-#  NOT been located, and it is NOT known whether it is a design defect or an
-#  Icarus-specific evaluation artefact, because the reference simulator is
-#  unavailable. The coherent SoC stalled the same way before the crossbar
-#  existed. Only tb_axi is in the default list below.
+#  tb_soc_stub_1pe / _1pe_nc / _2pe_nc build the same thing with fewer PEs.
 #
-#  Needing xsim regardless: tb_dcu and tb_coherent_subsystem (their stimulus
-#  uses `break` and procedural `automatic`), and tb_pe / tb_soc, which
-#  instantiate the real CV32E40P -- Icarus cannot elaborate it.
+#  Still needing xsim: tb_dcu and tb_coherent_subsystem (their stimulus uses
+#  `break` and procedural `automatic`), and tb_pe / tb_soc, which instantiate
+#  the real CV32E40P -- Icarus cannot elaborate it, as it uses `inside`
+#  expressions among other things.
 #
 #  The array size is a knob: -DSOC_STUB_N=<n> (default 64).
 #
-#  Usage:  sim/run_iverilog.sh              run the set that passes
+#  Usage:  sim/run_iverilog.sh              run all three
 #          sim/run_iverilog.sh tb_axi       run one
 # =============================================================================
 set -euo pipefail
@@ -95,7 +87,7 @@ run_one() {
             $root/tb/system/tb_soc_stub.sv" ;;
     *)
       echo "unknown testbench: $tb" >&2
-      echo "this script runs: tb_axi (the others need xsim)" >&2
+      echo "this script runs: tb_axi, tb_soc_stub, tb_soc_stub_nc" >&2
       echo "everything else needs Vivado xsim -- see sim/run_xsim.ps1" >&2
       return 2 ;;
   esac
@@ -113,5 +105,5 @@ run_one() {
 if [ $# -gt 0 ]; then
   for tb in "$@"; do run_one "$tb"; done
 else
-  for tb in tb_axi; do run_one "$tb"; done
+  for tb in tb_axi tb_soc_stub_nc tb_soc_stub; do run_one "$tb"; done
 fi

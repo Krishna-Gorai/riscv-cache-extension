@@ -45,7 +45,7 @@ module instr_bridge #(
   logic [NumTgt-1:0]       dn_req, dn_gnt, dn_rvalid;
   logic [NumTgt*DataW-1:0] dn_rdata;
 
-  always_comb begin
+  always @(*) begin
     sel = '0;
     unique case (core_addr_i[AddrW-1 -: 4])
       ItcmNib:  sel[0] = 1'b1;

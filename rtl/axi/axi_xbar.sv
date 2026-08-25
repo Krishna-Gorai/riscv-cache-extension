@@ -30,6 +30,20 @@
 //  drained. Slaves respond in order, so this is what keeps a master's responses
 //  in order without any reorder buffer -- the same rule bridge_router uses.
 // =============================================================================
+// -----------------------------------------------------------------------------
+//  Note on `always @(*)` rather than `always_comb`
+//
+//  These are equivalent for synthesis and infer the same combinational logic.
+//  `always_comb` is the better style and is what this was written with, but
+//  Icarus Verilog 12 derives its sensitivity list from every signal the block
+//  *references*, including the ones it only writes. A block that clears a
+//  vector and then conditionally sets part of it therefore schedules itself
+//  again on its own writes, and the design stops settling within a timestep --
+//  simulation time freezes with no error. `always @(*)` takes sensitivity from
+//  reads alone and does not. Keeping the repository runnable on a free
+//  simulator is worth the slightly weaker compile-time checking; xsim handles
+//  either form.
+// -----------------------------------------------------------------------------
 module axi_xbar #(
   parameter  int unsigned NumMasters     = 12,
   parameter  int unsigned NumSlaves      = 3,
@@ -129,9 +143,9 @@ module axi_xbar #(
 
   //  Slaves are walked from the top down so that the lowest matching index is
   //  the one left standing. Nothing here reads a variable it also writes: an
-  //  always_comb that does can fail to settle, because a simulator is entitled
+  //  always @(*) that does can fail to settle, because a simulator is entitled
   //  to re-evaluate it on every assignment rather than only on a change.
-  always_comb begin
+  always @(*) begin
     for (int unsigned m = 0; m < NumMasters; m++) begin
       ar_hit[m]    = '0;
       aw_hit[m]    = '0;
@@ -168,7 +182,7 @@ module axi_xbar #(
 
   logic [NumMasters-1:0] rd_may_issue, wr_may_issue;
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned m = 0; m < NumMasters; m++) begin
       rd_may_issue[m] = (rd_cnt_q[m] != CntW'(MaxOutstanding))
                         && ((rd_cnt_q[m] == '0) || (rd_tgt_q[m] == ar_slv[m]));
@@ -185,14 +199,14 @@ module axi_xbar #(
   logic [NumSlaves*IdW-1:0] ar_gnt_mst;
 
   //  One block per slave, each writing only its own scalars. Selecting inside
-  //  a single always_comb that indexed shared vectors by the loop variable did
+  //  a single always @(*) that indexed shared vectors by the loop variable did
   //  not settle: a bit-write through a variable index is a read-modify-write of
   //  the whole vector, which puts the block in its own sensitivity list.
   for (genvar s = 0; s < NumSlaves; s++) begin : g_ar_arb
     logic           gv;
     logic [IdW-1:0] gm;
 
-    always_comb begin
+    always @(*) begin
       gv = 1'b0;
       gm = '0;
       // walked backwards, so the master nearest the pointer wins the overwrite
@@ -234,7 +248,7 @@ module axi_xbar #(
     logic           gv;
     logic [IdW-1:0] gm;
 
-    always_comb begin
+    always @(*) begin
       gv = 1'b0;
       gm = '0;
       if (!w_busy_q[s]) begin
@@ -290,7 +304,7 @@ module axi_xbar #(
     logic [DataW-1:0] rd;
     logic [1:0]       rr;
 
-    always_comb begin
+    always @(*) begin
       rv = 1'b0;
       rl = 1'b0;
       rd = '0;
@@ -322,7 +336,7 @@ module axi_xbar #(
     logic       bv;
     logic [1:0] br;
 
-    always_comb begin
+    always @(*) begin
       bv = 1'b0;
       br = RESP_OKAY;
       if (err_b_pend_q[m]) begin
@@ -361,7 +375,7 @@ module axi_xbar #(
   for (genvar m = 0; m < NumMasters; m++) begin : g_mready
     logic arr, awr, wrr;
 
-    always_comb begin
+    always @(*) begin
       arr = 1'b0;
       awr = 1'b0;
       wrr = 1'b0;

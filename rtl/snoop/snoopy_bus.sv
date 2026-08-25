@@ -71,7 +71,7 @@ module snoopy_bus
 
   // The qualifier is only ever compared, so the raw slice off the packed bus
   // is matched against the enum values directly rather than cast first.
-  always_comb begin
+  always @(*) begin
     for (int unsigned c = 0; c < NumCores; c++) begin
       is_write[c] = req_i[c] &&  is_inv_i[c];
       is_read[c]  = req_i[c] && !is_inv_i[c];
@@ -92,7 +92,7 @@ module snoopy_bus
   // writer as well: that is the Single-Writer half of the MRSW invariant.
   logic [NumCores-1:0] write_blocked;
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned w = 0; w < NumCores; w++) begin
       write_blocked[w] = 1'b0;
       for (int unsigned c = 0; c < NumCores; c++) begin
@@ -128,7 +128,7 @@ module snoopy_bus
   // requesting DCU's stage 1.
   assign bcast_needed = inv_arb_valid && !(win_is_sc && !sc_excl_ok);
 
-  always_comb begin
+  always @(*) begin
     others_ready = 1'b1;
     for (int unsigned c = 0; c < NumCores; c++) begin
       if (c != int'(inv_arb_idx) && !inv_ready_i[c]) others_ready = 1'b0;
@@ -164,7 +164,7 @@ module snoopy_bus
   // ---------------------------------------------------------------------------
   logic [NumCores-1:0] read_blocked;
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned r = 0; r < NumCores; r++) begin
       read_blocked[r] = 1'b0;
       for (int unsigned c = 0; c < NumCores; c++) begin
@@ -235,7 +235,7 @@ module snoopy_bus
   // ---------------------------------------------------------------------------
   //  Grants and broadcast
   // ---------------------------------------------------------------------------
-  always_comb begin
+  always @(*) begin
     for (int unsigned c = 0; c < NumCores; c++) begin
       if (is_write[c]) begin
         gnt_o[c] = inv_gnt_vec[c];
@@ -251,7 +251,7 @@ module snoopy_bus
     end
   end
 
-  always_comb begin
+  always @(*) begin
     inv_valid_o = '0;
     inv_addr_o  = '0;
     for (int unsigned c = 0; c < NumCores; c++) begin

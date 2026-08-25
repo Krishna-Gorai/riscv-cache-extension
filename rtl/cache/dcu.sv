@@ -352,7 +352,7 @@ module dcu
 
   // --- Victim selection: fill an invalid way first, otherwise the LRU way.
   logic [WayW-1:0] victim_way;
-  always_comb begin
+  always @(*) begin
     victim_way = WayW'(lru_q[s2_idx]);
     for (int unsigned w = NumWays; w > 0; w--) begin
       if (!valid_q[s2_idx][w-1]) victim_way = WayW'(w-1);
@@ -386,7 +386,7 @@ module dcu
   logic fill_en;   // refill the victim way this cycle
   logic wr_hit_en; // update a word of the hit way this cycle
 
-  always_comb begin
+  always @(*) begin
     ccl_d        = ccl_q;
     s2_done      = 1'b0;
     fill_en      = 1'b0;
@@ -489,7 +489,7 @@ module dcu
   assign hit_word  = dat_rdata[(hit_way*WordsPerLine + s2_wsel)*DataW +: DataW];
   assign fill_word = mem_rd_rdata_i[s2_wsel*DataW +: DataW];
 
-  always_comb begin
+  always @(*) begin
     for (int unsigned b = 0; b < WordBytes; b++) begin
       merged_word[b*8 +: 8] = s2_be_q[b] ? s2_wdata_q[b*8 +: 8]
                                          : hit_word  [b*8 +: 8];
@@ -498,13 +498,13 @@ module dcu
 
   assign ram_waddr = s2_idx;
 
-  always_comb begin
+  always @(*) begin
     tag_we    = '0;
     tag_wdata = {NumWays{s2_tag}};
     if (fill_en) tag_we[victim_way] = 1'b1;
   end
 
-  always_comb begin
+  always @(*) begin
     dat_we    = '0;
     dat_wdata = '0;
     if (fill_en) begin
