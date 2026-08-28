@@ -1,17 +1,29 @@
 /* ===========================================================================
  *  bench_fft.c -- Fig. 6: radix-2 decimation-in-time FFT, Q15 twiddles.
  *
- *  In-place, so the butterflies of one stage write the operands the next
- *  stage reads, with a barrier between stages. That makes this the only
- *  kernel in the set where PEs genuinely invalidate each other mid-run: at
- *  every stage boundary a PE re-reads lines another PE has just written.
+ *  ONE INDEPENDENT TRANSFORM PER PE. Fig. 6 labels its x-axis "FFT Input Size
+ *  per Sample", and that "per Sample" is the whole decomposition: each PE owns
+ *  a sample buffer and transforms it end to end. Four PEs run four N-point
+ *  transforms, they never touch each other's data, and there is no barrier
+ *  inside the timed region.
  *
- *  It is also the kernel with the worst locality, and it gets worse with
- *  size. The stride between the two halves of a butterfly doubles every
- *  stage, so by the last stages the two operands are far enough apart to land
- *  in different lines and different sets. The paper reports FFT as its
- *  smallest gain and shows its hit rate FALLING as the transform grows; this
- *  is the mechanism behind both.
+ *  The earlier version split ONE transform across the PEs, with a barrier at
+ *  every stage boundary. That is a defensible way to parallelise an FFT, but
+ *  it is not what the figure measures, and it scaled the wrong way: the
+ *  stage-boundary invalidations and the log2(N) barriers grew with N, so the
+ *  measured reduction FELL from 13.9 % at N=128 to 3.5 % at N=1024 while the
+ *  paper reports a roughly flat ~23 %.
+ *
+ *  Locality still degrades with size -- the butterfly half-span doubles every
+ *  stage, so the late stages stride further than a line -- which is the
+ *  mechanism behind the paper reporting FFT as its smallest gain. That effect
+ *  is real and is kept. What is gone is the cross-PE sharing on top of it.
+ *
+ *  Every PE transforms the SAME input sequence. Control flow here is
+ *  data-independent, so identical inputs change neither the cycle count nor
+ *  the hit rate -- but it makes PE0's output block bit-identical to what the
+ *  old shared-array version produced, which is a free regression check that
+ *  the rewrite changed the decomposition and not the arithmetic.
  *
  *  Fixed point rather than float: CV32E40P here has no F extension.
  *
@@ -26,19 +38,17 @@
 
 /* Fig. 6 sweeps the transform over 128, 256, 512 and 1024 points. Size and
  * golden both come from the build, so one source builds every point:
- *   KCFLAGS="-DBENCH_LOG2N=10 -DBENCH_GOLDEN=0xFD1CE860u" OUT_SUFFIX=_1024 ...
+ *   KCFLAGS="-DBENCH_LOG2N=10 -DBENCH_GOLDEN=0x5E33A180u" OUT_SUFFIX=_1024 ...
  * The defaults are the leftmost point of the figure. */
 #ifndef BENCH_LOG2N
 #define BENCH_LOG2N  7u
 #endif
 #ifndef BENCH_GOLDEN
-#define BENCH_GOLDEN 0xBA932680u
+#define BENCH_GOLDEN 0x3F6C9A00u
 #endif
 
 #define LOG2N    BENCH_LOG2N
 #define NPT      (1u << LOG2N)
-#define RE_OFF   0x0000u
-#define IM_OFF   (NPT * 4u)             /* immediately after RE: one region   */
 
 #define GOLDEN   BENCH_GOLDEN
 
@@ -178,7 +188,6 @@ static const int32_t TW[TWN / 2][2] = {
     { -32729,  -1608 }, { -32738,  -1407 }, { -32746,  -1206 }, { -32753,  -1005 },
     { -32758,   -804 }, { -32762,   -603 }, { -32766,   -402 }, { -32767,   -201 },
 };
-
 static inline uint32_t bitrev(uint32_t v) {
     uint32_t r = 0;
     for (uint32_t b = 0; b < LOG2N; b++) { r = (r << 1) | (v & 1u); v >>= 1; }
@@ -186,30 +195,34 @@ static inline uint32_t bitrev(uint32_t v) {
 }
 
 int main(void) {
-    volatile uint32_t *re = shared_ptr(RE_OFF);
-    volatile uint32_t *im = shared_ptr(IM_OFF);
-
     uint32_t id  = hart_id();
     uint32_t npe = NUM_PES;
-    uint32_t lo, hi, blo, bhi, t0, t1;
+
+    /* This PE's own buffer: RE then IM, 2*NPT words, immediately after the
+     * blocks of the lower-numbered PEs. Nothing outside this window is ever
+     * read or written by this PE, so no line is ever shared and the snoopy
+     * bus stays silent for the whole timed region. */
+    uint32_t base = id * 2u * NPT * 4u;
+    volatile uint32_t *re = shared_ptr(base);
+    volatile uint32_t *im = shared_ptr(base + NPT * 4u);
+
+    uint32_t t0, t1;
     uint32_t tot0 = 0;
 
-    bench_range(NPT, id, npe, &lo, &hi);
-
-    for (uint32_t i = lo; i < hi; i++) {
+    for (uint32_t i = 0; i < NPT; i++) {
         re[i] = (uint32_t)(int32_t)((int32_t)((i * 37u) % 1000u) - 500);
         im[i] = 0u;
     }
+
+    /* The one barrier: it aligns the start so the four measurements cover the
+     * same window of contention, not so the algorithm needs it. */
     barrier();
 
     if (id == 0) tot0 = CYCLE_LO;
     t0 = CYCLE_LO;
 
-    /* --- bit-reversal permutation ----------------------------------------
-     * Each swap touches the pair (i, bitrev(i)) and no other, so the pairs
-     * are disjoint and the PEs can do them in parallel. The j > i guard is
-     * what makes each pair get swapped exactly once instead of twice. */
-    for (uint32_t i = lo; i < hi; i++) {
+    /* --- bit-reversal permutation --------------------------------------- */
+    for (uint32_t i = 0; i < NPT; i++) {
         uint32_t j = bitrev(i);
         if (j > i) {
             uint32_t tr = re[i], ti = im[i];
@@ -217,38 +230,31 @@ int main(void) {
             re[j] = tr;    im[j] = ti;
         }
     }
-    barrier();
 
-    /* --- log2(N) butterfly stages ----------------------------------------
-     * The N/2 butterflies of a stage are split across the PEs by a flat
-     * index; group and offset come out of it by shift and mask because the
-     * half-span is always a power of two. */
-    bench_range(NPT / 2u, id, npe, &blo, &bhi);
-
+    /* --- log2(N) butterfly stages, all N/2 butterflies on this PE -------- */
     for (uint32_t s = 0; s < LOG2N; s++) {
         uint32_t half = 1u << s;
         uint32_t step = half << 1;
 
-        for (uint32_t b = blo; b < bhi; b++) {
-            uint32_t g  = b >> s;
-            uint32_t k  = b & (half - 1u);
-            uint32_t ia = g * step + k;
-            uint32_t ib = ia + half;
+        for (uint32_t g = 0; g < NPT; g += step) {
+            for (uint32_t k = 0; k < half; k++) {
+                uint32_t ia = g + k;
+                uint32_t ib = ia + half;
 
-            int32_t wr = TW[k * (TWN / step)][0];
-            int32_t wi = TW[k * (TWN / step)][1];
-            int32_t br = (int32_t)re[ib], bi = (int32_t)im[ib];
-            int32_t ar = (int32_t)re[ia], ai = (int32_t)im[ia];
+                int32_t wr = TW[k * (TWN / step)][0];
+                int32_t wi = TW[k * (TWN / step)][1];
+                int32_t br = (int32_t)re[ib], bi = (int32_t)im[ib];
+                int32_t ar = (int32_t)re[ia], ai = (int32_t)im[ia];
 
-            int32_t tr = (wr * br - wi * bi) >> 15;
-            int32_t ti = (wr * bi + wi * br) >> 15;
+                int32_t tr = (wr * br - wi * bi) >> 15;
+                int32_t ti = (wr * bi + wi * br) >> 15;
 
-            re[ib] = (uint32_t)((ar - tr) >> 1);
-            im[ib] = (uint32_t)((ai - ti) >> 1);
-            re[ia] = (uint32_t)((ar + tr) >> 1);
-            im[ia] = (uint32_t)((ai + ti) >> 1);
+                re[ib] = (uint32_t)((ar - tr) >> 1);
+                im[ib] = (uint32_t)((ai - ti) >> 1);
+                re[ia] = (uint32_t)((ar + tr) >> 1);
+                im[ia] = (uint32_t)((ai + ti) >> 1);
+            }
         }
-        barrier();
     }
     t1 = CYCLE_LO;
 
@@ -256,11 +262,12 @@ int main(void) {
     barrier();
 
     if (id == 0) {
-        /* RE and IM are adjacent, so the harness scores both as one region. */
-        bench_publish(npe, CYCLE_LO - tot0, RE_OFF, 2u * NPT, GOLDEN);
+        /* Every PE's block is scored, so a PE that got its own transform
+         * wrong is caught even though the blocks hold the same values. */
+        bench_publish(npe, CYCLE_LO - tot0, 0u, npe * 2u * NPT, GOLDEN);
         puts_("fft: n=");     putdec(NPT);
         puts_(" cycles=");    putdec(t1 - t0);
-        putch('\n');
+        putch(10);
     }
     return 0;
 }

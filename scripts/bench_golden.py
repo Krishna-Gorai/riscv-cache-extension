@@ -141,8 +141,14 @@ def bench_fft(log2n=7):
                 xi[a] = (ai + ti) >> 1
         half = step
 
-    return csum([v & M32 for v in xr] + [v & M32 for v in xi]), xr, xi
+    # One PE's block. Every PE transforms the same input, so the published
+    # region is this block repeated NPE times -- and scoring all of it means
+    # a PE that got its own transform wrong is caught.
+    block = [v & M32 for v in xr] + [v & M32 for v in xi]
+    return csum(block * NPE), xr, xi, csum(block)
 
+
+NPE        = 4                       # PEs in the SoC under test
 
 MEMCPY_KIB = [4, 8, 16, 32]          # Fig. 5 x-axis
 MATMUL_N   = [32, 64, 128]           # Fig. 6/7 x-axis
@@ -177,7 +183,7 @@ if __name__ == "__main__":
     print("-" * 46)
 
     for lg in FFT_LOG2:
-        _, fr, fi = bench_fft(lg)
+        _, fr, fi, _one = bench_fft(lg)
         mx = max(max(abs(v) for v in fr), max(abs(v) for v in fi))
         ok = "ok" if mx * 32768 < 2**31 else "OVERFLOW"
-        print("fft N=%-5d peak magnitude %6d  int32 headroom: %s" % (1 << lg, mx, ok))
+        print("fft N=%-5d peak magnitude %6d  int32 headroom: %-8s one-block golden 0x%08X" % (1 << lg, mx, ok, _one))
