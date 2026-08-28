@@ -23,7 +23,11 @@
 module bench_harness #(
   parameter bit          Coherent = 1'b1,
   parameter string       Label    = "coherent",
-  parameter int unsigned MemLat   = 2
+  parameter int unsigned MemLat   = 2,
+  // Cache geometry. The defaults are the paper's 2 KiB 2-way; the sweeps
+  // below vary them to separate a capacity miss from a conflict miss.
+  parameter int unsigned NumWays  = 2,
+  parameter int unsigned NumSets  = 64
 );
 
   import cache_pkg::*;
@@ -69,8 +73,8 @@ module bench_harness #(
   soc_top #(
     .NumPes     (NumPes),
     .Coherent   (Coherent),
-    .NumWays    (2),
-    .NumSets    (64),
+    .NumWays    (NumWays),
+    .NumSets    (NumSets),
     .LineBytes  (LineBytes),
     .AddrW      (AddrW),
     .DataW      (DataW),
@@ -345,4 +349,40 @@ endmodule
 
 module tb_bench_nc_l20;
   bench_harness #(.Coherent(1'b0), .Label("tb_bench_nc [non-coherent]"), .MemLat(20)) h ();
+endmodule
+
+// -----------------------------------------------------------------------------
+//  Separating a capacity miss from a conflict miss.
+//
+//  The per-PE FFT working set is 8N bytes, so N=512 is the first size that
+//  does not fit the paper's 2 KiB DCU -- and it is also the first size whose
+//  butterfly half-span reaches the set-index period, so the two operands of a
+//  butterfly alias onto one set. Both effects arrive together at N=512, and a
+//  single run cannot tell them apart. These two do:
+//
+//    tb_bench_w4    4-way, 32 sets  = 2 KiB   capacity held, ways doubled
+//    tb_bench_c8k   2-way, 256 sets = 8 KiB   ways held, capacity x4
+//
+//  If associativity is the cause, w4 recovers and c8k does not. If capacity
+//  is the cause, the opposite. If both matter, both recover partially.
+//
+//  Only the coherent side needs re-running: the non-coherent baseline has no
+//  cache, so its cycle count does not depend on either parameter.
+// -----------------------------------------------------------------------------
+module tb_bench_w4;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent 4-way 2KiB]"),
+                  .NumWays(4), .NumSets(32)) h ();
+endmodule
+
+module tb_bench_c8k;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent 2-way 8KiB]"),
+                  .NumWays(2), .NumSets(256)) h ();
+endmodule
+
+//  N=1024's per-PE working set is exactly 8 KiB, so an 8 KiB DCU is the
+//  borderline case and would not show whether the curve is really flat.
+//  16 KiB gives the working set room and tests flatness honestly.
+module tb_bench_c16k;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent 2-way 16KiB]"),
+                  .NumWays(2), .NumSets(512)) h ();
 endmodule
