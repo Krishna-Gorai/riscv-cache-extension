@@ -34,13 +34,24 @@
 
 #include "bench.h"
 
-#define N        32u
-#define A_OFF    0x0000u                /* 1024 words = 0x1000 bytes         */
-#define B_OFF    0x1000u
-#define C_OFF    0x2000u
+/* Fig. 6 sweeps the matrix size over 32x32, 64x64 and 128x128. Size and
+ * golden both come from the build, so one source builds every point:
+ *   KCFLAGS="-DBENCH_N=64 -DBENCH_GOLDEN=0x1CDFA3A6u" OUT_SUFFIX=_64 ./build.sh ...
+ * The defaults are the leftmost point of the figure. */
+#ifndef BENCH_N
+#define BENCH_N     32u
+#endif
+#ifndef BENCH_GOLDEN
+#define BENCH_GOLDEN 0xD4B9F33Cu
+#endif
 
-/* scripts/bench_golden.py :: bench_matmul */
-#define GOLDEN   0xD4B9F33Cu
+#define N        BENCH_N
+#define MAT_B    (N * N * 4u)           /* bytes in one matrix               */
+#define A_OFF    0x0000u
+#define B_OFF    MAT_B
+#define C_OFF    (2u * MAT_B)
+
+#define GOLDEN   BENCH_GOLDEN
 
 int main(void) {
     volatile uint32_t *A = shared_ptr(A_OFF);

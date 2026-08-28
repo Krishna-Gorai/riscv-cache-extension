@@ -37,7 +37,8 @@ def s32(v):
 #  memcpy -- N words copied from src to dst. Streaming, no reuse: this is the
 #  Fig. 5 latency benchmark.
 # ---------------------------------------------------------------------------
-def bench_memcpy(N=1024):
+def bench_memcpy(kib=4):
+    N = kib * 256
     src = [(i * 7 + 1) & M32 for i in range(N)]
     dst = list(src)
     return csum(dst)
@@ -66,7 +67,8 @@ def bench_matmul(N=32):
 #  window reads each input row for three consecutive output rows, so a row band
 #  stays resident: this is the high-reuse case.
 # ---------------------------------------------------------------------------
-def bench_conv2d(H=32, W=32):
+def bench_conv2d(N=32):
+    H = W = N
     K = [[1, 2, 1], [2, 4, 2], [1, 2, 1]]          # separable blur, sums to 16
     img = [[(i * W + j) % 251 for j in range(W)] for i in range(H)]
     OH, OW = H - 2, W - 2
@@ -90,11 +92,7 @@ def bench_conv2d(H=32, W=32):
 #  Amplitudes are kept under +-500 so that wr*xr never leaves int32 and the
 #  C and Python results agree exactly without emulating wraparound.
 # ---------------------------------------------------------------------------
-FFT_N = 128
-FFT_LOG2 = 7
-
-
-def fft_twiddles(N=FFT_N):
+def fft_twiddles(N):
     import math
     tw = []
     for k in range(N // 2):
@@ -106,11 +104,19 @@ def fft_twiddles(N=FFT_N):
     return tw
 
 
-def bench_fft(N=FFT_N, log2n=FFT_LOG2):
+def bench_fft(log2n=7):
+    """Radix-2 DIT, Q15 twiddles, int32 datapath, scaled by 1/2 every stage.
+
+    The per-stage shift is what makes the kernel safe at every size the paper
+    uses. Without it the magnitude doubles per stage, and by N=1024 a twiddle
+    product would leave int32 -- which would not just be inaccurate, it would
+    stop the C and the Python agreeing, because C wraps and Python does not.
+    With it the magnitude stays put and the same code runs at 128 and at 1024.
+    """
+    N = 1 << log2n
     xr = [((i * 37) % 1000) - 500 for i in range(N)]
     xi = [0] * N
 
-    # bit-reversal permutation
     for i in range(N):
         j = int('{:0{w}b}'.format(i, w=log2n)[::-1], 2)
         if j > i:
@@ -128,33 +134,50 @@ def bench_fft(N=FFT_N, log2n=FFT_LOG2):
                 a, b = base + k, base + k + half
                 tr = (wr * xr[b] - wi * xi[b]) >> 15
                 ti = (wr * xi[b] + wi * xr[b]) >> 15
-                xr[b] = xr[a] - tr
-                xi[b] = xi[a] - ti
-                xr[a] = xr[a] + tr
-                xi[a] = xi[a] + ti
+                ar, ai = xr[a], xi[a]
+                xr[b] = (ar - tr) >> 1
+                xi[b] = (ai - ti) >> 1
+                xr[a] = (ar + tr) >> 1
+                xi[a] = (ai + ti) >> 1
         half = step
 
     return csum([v & M32 for v in xr] + [v & M32 for v in xi]), xr, xi
 
 
+MEMCPY_KIB = [4, 8, 16, 32]          # Fig. 5 x-axis
+MATMUL_N   = [32, 64, 128]           # Fig. 6/7 x-axis
+CONV2D_N   = [32, 64, 128]           # Fig. 6/7 x-axis
+FFT_LOG2   = [7, 8, 9, 10]           # Fig. 6/7 x-axis: 128 .. 1024
+
+
 if __name__ == "__main__":
-    mc = bench_memcpy()
-    mm = bench_matmul()
-    cv = bench_conv2d()
-    ft, fr, fi = bench_fft()
+    import sys
 
-    print("golden checksums (paste into the GOLDEN define of each kernel)")
-    print("  bench_memcpy   N=1024 words        0x%08X  (%u)" % (mc, mc))
-    print("  bench_matmul   32x32 int32         0x%08X  (%u)" % (mm, mm))
-    print("  bench_conv2d   3x3 over 32x32      0x%08X  (%u)" % (cv, cv))
-    print("  bench_fft      N=128 Q15 radix-2   0x%08X  (%u)" % (ft, ft))
+    rows = []
+    for k in MEMCPY_KIB:
+        rows.append(("memcpy", "%dKiB" % k, k, bench_memcpy(k)))
+    for n in MATMUL_N:
+        rows.append(("matmul", "%dx%d" % (n, n), n, bench_matmul(n)))
+    for n in CONV2D_N:
+        rows.append(("conv2d", "%dx%d" % (n, n), n, bench_conv2d(n)))
+    for lg in FFT_LOG2:
+        rows.append(("fft", "N=%d" % (1 << lg), lg, bench_fft(lg)[0]))
 
-    # a couple of spot values, so a wrong kernel can be localised rather than
-    # just reported as "checksum differs"
-    print("\nspot checks")
-    print("  fft xr[0..3] = %s" % fr[:4])
-    print("  fft xi[1..4] = %s" % fi[1:5])
+    if "--defs" in sys.argv:
+        # emitted so build_bench.sh can compile one image per configuration
+        for kern, label, param, gold in rows:
+            print("%s %s %d 0x%08X" % (kern, label.replace("KiB", ""), param, gold))
+        sys.exit(0)
 
-    mx = max(max(abs(v) for v in fr), max(abs(v) for v in fi))
-    print("  fft peak magnitude = %d (int32 headroom ok: %s)"
-          % (mx, "yes" if mx * 32768 < 2**31 else "NO -- reduce input amplitude"))
+    print("golden checksums for every configuration the paper evaluates")
+    print("%-8s %-10s %-8s %s" % ("kernel", "size", "param", "golden"))
+    print("-" * 46)
+    for kern, label, param, gold in rows:
+        print("%-8s %-10s %-8d 0x%08X" % (kern, label, param, gold))
+    print("-" * 46)
+
+    for lg in FFT_LOG2:
+        _, fr, fi = bench_fft(lg)
+        mx = max(max(abs(v) for v in fr), max(abs(v) for v in fi))
+        ok = "ok" if mx * 32768 < 2**31 else "OVERFLOW"
+        print("fft N=%-5d peak magnitude %6d  int32 headroom: %s" % (1 << lg, mx, ok))

@@ -14,12 +14,22 @@
 
 #include "bench.h"
 
-#define N        1024u                  /* words copied                      */
-#define SRC_OFF  0x0000u
-#define DST_OFF  0x1000u                /* 1024 words = 0x1000 bytes on       */
+/* Fig. 5 sweeps the transfer size over 4, 8, 16 and 32 KiB. Both the size and
+ * the golden come from the build, so one source builds every point:
+ *   KCFLAGS="-DBENCH_KIB=8 -DBENCH_GOLDEN=0x42D89C00u" OUT_SUFFIX=_8k ./build.sh ...
+ * The defaults are the leftmost point of the figure. */
+#ifndef BENCH_KIB
+#define BENCH_KIB   4u
+#endif
+#ifndef BENCH_GOLDEN
+#define BENCH_GOLDEN 0xF96C4E00u
+#endif
 
-/* scripts/bench_golden.py :: bench_memcpy */
-#define GOLDEN   0xF96C4E00u
+#define N        (BENCH_KIB * 256u)     /* words copied                      */
+#define SRC_OFF  0x0000u
+#define DST_OFF  (BENCH_KIB * 1024u)    /* immediately after the source      */
+
+#define GOLDEN   BENCH_GOLDEN
 
 int main(void) {
     volatile uint32_t *src = shared_ptr(SRC_OFF);
@@ -48,7 +58,8 @@ int main(void) {
 
     if (id == 0) {
         bench_publish(npe, CYCLE_LO - tot0, DST_OFF, N, GOLDEN);
-        puts_("memcpy: n=");   putdec(N);
+        puts_("memcpy: kib="); putdec(BENCH_KIB);
+        puts_(" n=");         putdec(N);
         puts_(" cycles=");     putdec(t1 - t0);
         putch('\n');
     }

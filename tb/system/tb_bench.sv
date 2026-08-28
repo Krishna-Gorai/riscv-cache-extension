@@ -36,9 +36,10 @@ module bench_harness #(
 
   localparam time CLK_P = 10ns;
 
-  // The results block, mirrored from sw/lib/bench.h. Byte 0xF000 of the shared
-  // data memory; the indices below are words inside it.
-  localparam int unsigned RES_WORD    = 32'hF000 >> 2;
+  // The results block, mirrored from sw/lib/bench.h. Parked at the top of the
+  // 256 KiB shared data memory, because the paper's largest configuration is a
+  // 128x128 matrix multiply and its three matrices occupy 192 KiB below it.
+  localparam int unsigned RES_WORD    = 32'h3F000 >> 2;
   localparam int unsigned BR_CYCLES   = 0;
   localparam int unsigned BR_STATUS   = 8;
   localparam int unsigned BR_RES_OFF  = 16;
@@ -63,6 +64,7 @@ module bench_harness #(
   logic [NumPes-1:0]       core_sleep;
 
   logic [NumPes*32-1:0]    p_rd_hit, p_rd_miss, p_wr_hit, p_wr_miss;
+  logic [NumPes*32-1:0]    p_busy, p_stall_snoop, p_stall_s2, p_rd_wait, p_wr_wait;
 
   soc_top #(
     .NumPes     (NumPes),
@@ -92,7 +94,13 @@ module bench_harness #(
     .perf_rd_hit_o   (p_rd_hit),
     .perf_rd_miss_o  (p_rd_miss),
     .perf_wr_hit_o   (p_wr_hit),
-    .perf_wr_miss_o  (p_wr_miss)
+    .perf_wr_miss_o  (p_wr_miss),
+
+    .perf_busy_o        (p_busy),
+    .perf_stall_snoop_o (p_stall_snoop),
+    .perf_stall_s2_o    (p_stall_s2),
+    .perf_rd_wait_o     (p_rd_wait),
+    .perf_wr_wait_o     (p_wr_wait)
   );
 
   // --- console ---------------------------------------------------------------
@@ -200,6 +208,7 @@ module bench_harness #(
              Label, MemLat, kcyc_max, totcyc, cycle);
 
     report_hit_rates();
+    report_cycle_costs();
 
     $display("------------------------------------------------------------------");
     if (errors == 0) $display(" %s PASSED  (%0d checks)\n", Label, checks);
@@ -245,8 +254,56 @@ module bench_harness #(
              Label, trh, trh+trm, twh, twh+twm);
   endfunction
 
+  // ---------------------------------------------------------------------------
+  //  Where the cycles went.
+  //
+  //  The hit rate answers "how often did the cache answer locally". It does
+  //  not answer "what did an access cost", and for a write-through cache with
+  //  a snooping protocol those come apart badly: a store hits or misses but
+  //  broadcasts an INV REQ either way, so a kernel can have an excellent hit
+  //  rate and still be dominated by store cost. This is the second question.
+  // ---------------------------------------------------------------------------
+  function automatic void report_cycle_costs();
+    int unsigned busy, snoop, s2, rdw, wrw;
+    int unsigned reads, writes;
+    int unsigned tb_ = 0, tsn = 0, ts2 = 0, trd = 0, twr = 0, trr = 0, tww = 0;
+
+    $display("\n cycle accounting (per PE, cycles a core access spent in the DCU):");
+    $display("  PE   busy   snoop-gnt   stage2   rd-wait   wr-wait   reads  writes");
+    for (int unsigned p = 0; p < NumPes; p++) begin
+      busy   = p_busy       [p*32 +: 32];
+      snoop  = p_stall_snoop[p*32 +: 32];
+      s2     = p_stall_s2   [p*32 +: 32];
+      rdw    = p_rd_wait    [p*32 +: 32];
+      wrw    = p_wr_wait    [p*32 +: 32];
+      reads  = p_rd_hit[p*32 +: 32] + p_rd_miss[p*32 +: 32];
+      writes = p_wr_hit[p*32 +: 32] + p_wr_miss[p*32 +: 32];
+      tb_ += busy; tsn += snoop; ts2 += s2; trd += rdw; twr += wrw;
+      trr += reads; tww += writes;
+      $display("  %0d  %7d   %9d %8d  %8d  %8d %7d %7d",
+               p, busy, snoop, s2, rdw, wrw, reads, writes);
+    end
+
+    $display("\n aggregate:");
+    $display("  busy cycles        = %0d", tb_);
+    $display("  snoop-grant wait   = %0d  (%0.1f %% of busy)",
+             tsn, tb_ ? 100.0*real'(tsn)/real'(tb_) : 0.0);
+    $display("  stage-2 wait       = %0d  (%0.1f %%)",
+             ts2, tb_ ? 100.0*real'(ts2)/real'(tb_) : 0.0);
+    $display("  line-fill wait     = %0d  (%0.1f %%)",
+             trd, tb_ ? 100.0*real'(trd)/real'(tb_) : 0.0);
+    $display("  write-grant wait   = %0d  (%0.1f %%)",
+             twr, tb_ ? 100.0*real'(twr)/real'(tb_) : 0.0);
+    $display("  cycles per read    = %0.2f   (%0d reads)",
+             trr ? real'(tb_ - twr - tsn)/real'(trr) : 0.0, trr);
+    $display("  cycles per write   = %0.2f   (%0d writes)",
+             tww ? real'(twr + tsn)/real'(tww) : 0.0, tww);
+    $display(" BENCHCYC %s busy=%0d snoop=%0d s2=%0d rdwait=%0d wrwait=%0d reads=%0d writes=%0d",
+             Label, tb_, tsn, ts2, trd, twr, trr, tww);
+  endfunction
+
   initial begin
-    #40ms;
+    #800ms;   // the 128x128 matrix multiply is minutes of simulated time
     $display("*** %s TIMEOUT: done = %b ***", Label, done);
     $fatal(1);
   end

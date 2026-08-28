@@ -21,15 +21,25 @@
 
 #include "bench.h"
 
-#define H        32u
-#define W        32u
-#define OH       (H - 2u)               /* 30 */
-#define OW       (W - 2u)               /* 30 */
-#define IMG_OFF  0x0000u                /* 1024 words = 0x1000 bytes         */
-#define OUT_OFF  0x1000u                /* 900 words                         */
+/* Fig. 6 sweeps the input image over 32x32, 64x64 and 128x128. Size and
+ * golden both come from the build, so one source builds every point:
+ *   KCFLAGS="-DBENCH_N=64 -DBENCH_GOLDEN=0xC7FF1E28u" OUT_SUFFIX=_64 ./build.sh ...
+ * The defaults are the leftmost point of the figure. */
+#ifndef BENCH_N
+#define BENCH_N     32u
+#endif
+#ifndef BENCH_GOLDEN
+#define BENCH_GOLDEN 0xB4F41C8Au
+#endif
 
-/* scripts/bench_golden.py :: bench_conv2d */
-#define GOLDEN   0xB4F41C8Au
+#define H        BENCH_N
+#define W        BENCH_N
+#define OH       (H - 2u)
+#define OW       (W - 2u)
+#define IMG_OFF  0x0000u
+#define OUT_OFF  (H * W * 4u)           /* immediately after the image       */
+
+#define GOLDEN   BENCH_GOLDEN
 
 /* separable blur, sums to 16 -- the >>4 below is the normalisation */
 static const int32_t KER[3][3] = { { 1, 2, 1 }, { 2, 4, 2 }, { 1, 2, 1 } };

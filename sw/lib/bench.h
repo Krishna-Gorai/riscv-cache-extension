@@ -23,8 +23,10 @@
 
 #include "pe.h"
 
-/* The results block. Well clear of any kernel's working buffers. */
-#define BENCH_RES_OFF     0xF000u
+/* The results block, parked at the very top of the 256 KiB shared data memory.
+ * The largest configuration the paper evaluates is a 128x128 matrix multiply,
+ * whose three matrices are 192 KiB, so anything lower would be overrun. */
+#define BENCH_RES_OFF     0x3F000u
 
 /* Word indices inside the results block. Mirrored by tb/system/tb_bench.sv. */
 #define BR_CYCLES         0u    /* [0..7]  per-PE cycles spent in the kernel  */

@@ -42,6 +42,13 @@ OBJDUMP="$TOOLCHAIN/${PREFIX}objdump"
 ARCH=rv32imc_zicsr
 ABI=ilp32
 
+# Extra -D flags and an output-name suffix, so one source can be built at each
+# of the sizes the paper evaluates without editing it:
+#   KCFLAGS="-DBENCH_N=64 -DBENCH_GOLDEN=0x1CDFA3A6u" OUT_SUFFIX=_64 \
+#     ./build.sh soc:bench_matmul
+KCFLAGS="${KCFLAGS:-}"
+OUT_SUFFIX="${OUT_SUFFIX:-}"
+
 cd "$(dirname "$0")"
 mkdir -p build
 
@@ -51,7 +58,7 @@ build_one() {
     src="soc_kernels/$name.c"
     ld="lib/link_soc.ld"
     crt="lib/crt0_soc.S"
-    out="build/soc_$name"
+    out="build/soc_$name$OUT_SUFFIX"
     # The SoC image lives in the shared instruction memory, so the boot stub
     # section is part of the binary alongside the ITCM load image.
     sections="--only-section=.boot --only-section=.text --only-section=.rodata --only-section=.data"
@@ -59,13 +66,14 @@ build_one() {
     src="kernels/$name.c"
     ld="lib/link.ld"
     crt="lib/crt0.S"
-    out="build/$name"
+    out="build/$name$OUT_SUFFIX"
     sections="--only-section=.text --only-section=.rodata --only-section=.data"
   fi
 
-  echo "== $kind:$name =="
+  echo "== $kind:$name$OUT_SUFFIX ${KCFLAGS:+[$KCFLAGS]} =="
   "$CC" -march=$ARCH -mabi=$ABI -mcmodel=medlow \
         -Os -g -std=c11 -ffreestanding -fno-builtin -fno-common \
+        $KCFLAGS \
         -Wall -Wextra -Ilib \
         -nostdlib -nostartfiles -T "$ld" -Wl,--gc-sections \
         -Wl,-Map,"$out.map" \

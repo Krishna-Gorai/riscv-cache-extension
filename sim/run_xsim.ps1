@@ -13,12 +13,15 @@ param(
   [switch]$Wave,
   [string]$Hex       = "",
   [string]$Plusargs  = "",
+  [switch]$Reuse,          # reuse an existing snapshot: only the program image changed
+  [string]$OutDir    = "sim\out",  # run directory; a second one lets two sims run at once
+
   [string]$VivadoBin = "C:\Xilinx\xic\2025.1\Vivado\bin"
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$out  = Join-Path $root "sim\out"
+$out  = Join-Path $root $OutDir
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 Push-Location $out
 
@@ -102,6 +105,10 @@ $needCore = @("tb_pe", "tb_soc", "tb_soc_nc",
 $allSrcs  = if ($needCore) { $cvSrcs + $srcs } else { $srcs }
 $allIncs  = if ($needCore) { $incdirs } else { @() }
 
+$snapDir = Join-Path $out "xsim.dir\${Tb}_snap"
+if ($Reuse -and (Test-Path $snapDir)) {
+  Write-Host "== reusing snapshot ${Tb}_snap ==" -ForegroundColor DarkCyan
+} else {
 Write-Host "== xvlog ($($allSrcs.Count) files) ==" -ForegroundColor Cyan
 & $xvlog -sv --incr --nolog @allIncs @allSrcs
 if ($LASTEXITCODE -ne 0) { Pop-Location; throw "xvlog failed" }
@@ -112,6 +119,7 @@ $elabArgs = @("-debug", "typical", "--nolog", "-timescale", "1ns/1ps",
 if ($needCore) { $elabArgs = @("--relax") + $elabArgs }
 & $xelab @elabArgs
 if ($LASTEXITCODE -ne 0) { Pop-Location; throw "xelab failed" }
+}
 
 # Stage the program image under a fixed name: xsim's argument parser mangles
 # relative paths passed through -testplusarg, so the testbench always reads

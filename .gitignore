@@ -46,3 +46,4 @@ __pycache__/
 # without a RISC-V toolchain installed. Must come last: the generic *.hex
 # rule above would otherwise win.
 !sw/build/*.hex
+sim/out_cnt/
