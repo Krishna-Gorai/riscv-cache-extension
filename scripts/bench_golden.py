@@ -44,10 +44,11 @@ def bench_memcpy(N=1024):
 
 
 # ---------------------------------------------------------------------------
-#  matmul -- C = A x B over 16x16 int32 matrices, row-partitioned. Each element
+#  matmul -- C = A x B over 32x32 int32 matrices, row-partitioned. 32x32 is the
+#  leftmost point of the paper's Fig. 6 x-axis (32x32 / 64x64 / 128x128). Each element
 #  of B is re-read once per output row, which is where the reuse comes from.
 # ---------------------------------------------------------------------------
-def bench_matmul(N=16):
+def bench_matmul(N=32):
     A = [[(i * N + j) % 13 - 6 for j in range(N)] for i in range(N)]
     B = [[(i * 7 + j * 3) % 11 - 5 for j in range(N)] for i in range(N)]
     C = [[0] * N for _ in range(N)]
@@ -81,15 +82,16 @@ def bench_conv2d(H=32, W=32):
 
 
 # ---------------------------------------------------------------------------
-#  fft -- radix-2 decimation-in-time, N=64, Q15 twiddles, int32 datapath.
+#  fft -- radix-2 decimation-in-time, N=128, Q15 twiddles, int32 datapath.
+#  128 is the leftmost point of the paper's Fig. 6 FFT x-axis (128..1024).
 #  Strided butterflies with a barrier between stages: the paper's least
 #  improved kernel, and the one that stresses invalidation traffic most.
 #
 #  Amplitudes are kept under +-500 so that wr*xr never leaves int32 and the
 #  C and Python results agree exactly without emulating wraparound.
 # ---------------------------------------------------------------------------
-FFT_N = 64
-FFT_LOG2 = 6
+FFT_N = 128
+FFT_LOG2 = 7
 
 
 def fft_twiddles(N=FFT_N):
@@ -143,9 +145,9 @@ if __name__ == "__main__":
 
     print("golden checksums (paste into the GOLDEN define of each kernel)")
     print("  bench_memcpy   N=1024 words        0x%08X  (%u)" % (mc, mc))
-    print("  bench_matmul   16x16 int32         0x%08X  (%u)" % (mm, mm))
+    print("  bench_matmul   32x32 int32         0x%08X  (%u)" % (mm, mm))
     print("  bench_conv2d   3x3 over 32x32      0x%08X  (%u)" % (cv, cv))
-    print("  bench_fft      N=64 Q15 radix-2    0x%08X  (%u)" % (ft, ft))
+    print("  bench_fft      N=128 Q15 radix-2   0x%08X  (%u)" % (ft, ft))
 
     # a couple of spot values, so a wrong kernel can be localised rather than
     # just reported as "checksum differs"

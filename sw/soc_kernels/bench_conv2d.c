@@ -12,6 +12,11 @@
  *  read-shared lines, and under a snooping protocol they can sit valid in
  *  both caches at once, because nobody writes the image. It is the case that
  *  distinguishes "shared" from "contended".
+ *
+ *  Written tap-major and accumulating into the output row in memory, for the
+ *  same reason bench_matmul is: accumulating into a register would make every
+ *  store a write miss under write-through / no-allocate, and a kernel with a
+ *  0% write hit rate cannot reproduce the 96.5% Fig. 7 reports for this one.
  * ======================================================================== */
 
 #include "bench.h"
@@ -50,13 +55,27 @@ int main(void) {
     if (id == 0) tot0 = CYCLE_LO;
     t0 = CYCLE_LO;
     for (uint32_t oy = lo; oy < hi; oy++) {
-        for (uint32_t ox = 0; ox < OW; ox++) {
-            int32_t acc = 0;
-            for (uint32_t ky = 0; ky < 3u; ky++)
-                for (uint32_t kx = 0; kx < 3u; kx++)
-                    acc += (int32_t)img[(oy + ky) * W + (ox + kx)] * KER[ky][kx];
-            out[oy * OW + ox] = (uint32_t)(acc >> 4);
+        volatile uint32_t *orow = &out[oy * OW];
+
+        for (uint32_t ox = 0; ox < OW; ox++) orow[ox] = 0u;
+
+        /* Tap-major: the innermost loop walks a row of the image and a row of
+         * the output, both contiguous, and accumulates in memory so the store
+         * lands on a line the load ahead of it has just made resident. */
+        for (uint32_t ky = 0; ky < 3u; ky++) {
+            for (uint32_t kx = 0; kx < 3u; kx++) {
+                int32_t w = KER[ky][kx];
+                const uint32_t irow = (oy + ky) * W + kx;
+                for (uint32_t ox = 0; ox < OW; ox++)
+                    orow[ox] = (uint32_t)((int32_t)orow[ox]
+                                          + (int32_t)img[irow + ox] * w);
+            }
         }
+
+        /* The kernel sums to 16; normalise once the accumulation is complete,
+         * which keeps the result identical to summing then shifting. */
+        for (uint32_t ox = 0; ox < OW; ox++)
+            orow[ox] = (uint32_t)((int32_t)orow[ox] >> 4);
     }
     t1 = CYCLE_LO;
 
