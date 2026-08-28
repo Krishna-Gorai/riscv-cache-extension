@@ -13,7 +13,7 @@ param(
   [switch]$Wave,
   [string]$Hex       = "",
   [string]$Plusargs  = "",
-  [string]$VivadoBin = "D:\2025.1\Vivado\bin"
+  [string]$VivadoBin = "C:\Xilinx\xic\2025.1\Vivado\bin"
 )
 
 $ErrorActionPreference = "Stop"

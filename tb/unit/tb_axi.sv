@@ -289,6 +289,42 @@ module tb_axi;
   assign m_araddr[3*AddrW +: AddrW] = m3_araddr;
   assign m_awaddr[3*AddrW +: AddrW] = m3_awaddr;
 
+  //  The crossbar takes a request ON the clock edge and drops READY at that
+  //  same edge, so a poll that samples after the edge can never catch VALID
+  //  and READY high together. Capture master 3's handshakes in registers and
+  //  let the stimulus watch those -- the same trick masters 0..2 use for their
+  //  grants.
+  logic       m3_clr;
+  logic       m3_ar_hs_q, m3_r_hs_q, m3_rlast_q;
+  logic [1:0] m3_rresp_q;
+  logic       m3_aw_hs_q, m3_w_hs_q, m3_b_hs_q;
+  logic [1:0] m3_bresp_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      m3_ar_hs_q <= 1'b0; m3_r_hs_q <= 1'b0;
+      m3_rlast_q <= 1'b0; m3_rresp_q <= 2'b00;
+      m3_aw_hs_q <= 1'b0; m3_w_hs_q <= 1'b0;
+      m3_b_hs_q  <= 1'b0; m3_bresp_q <= 2'b00;
+    end else if (m3_clr) begin
+      m3_ar_hs_q <= 1'b0; m3_r_hs_q <= 1'b0;
+      m3_aw_hs_q <= 1'b0; m3_w_hs_q <= 1'b0; m3_b_hs_q <= 1'b0;
+    end else begin
+      if (m_arvalid[3] && m_arready[3]) m3_ar_hs_q <= 1'b1;
+      if (m_rvalid[3] && m_rready[3]) begin
+        m3_r_hs_q  <= 1'b1;
+        m3_rresp_q <= m_rresp[3*2 +: 2];
+        m3_rlast_q <= m_rlast[3];
+      end
+      if (m_awvalid[3] && m_awready[3]) m3_aw_hs_q <= 1'b1;
+      if (m_wvalid[3] && m_wready[3])   m3_w_hs_q  <= 1'b1;
+      if (m_bvalid[3] && m_bready[3]) begin
+        m3_b_hs_q  <= 1'b1;
+        m3_bresp_q <= m_bresp[3*2 +: 2];
+      end
+    end
+  end
+
   // ===========================================================================
   //  Stimulus
   //
@@ -369,7 +405,7 @@ module tb_axi;
     m1_rd_req = 0; m1_rd_line = 0; m1_rd_addr = 0;
     m1_wr_req = 0; m1_wr_addr = 0; m1_wr_be = 0; m1_wr_data = 0;
     m2_req = 0; m2_we = 0; m2_addr = 0; m2_wdata = 0;
-    m3_arvalid = 0; m3_awvalid = 0; m3_wvalid = 0;
+    m3_arvalid = 0; m3_awvalid = 0; m3_wvalid = 0; m3_clr = 0;
     m3_araddr = 0; m3_awaddr = 0;
 
     for (i = 0; i < 1024; i = i + 1) begin
@@ -474,43 +510,43 @@ module tb_axi;
     $display("--- A7: an address no slave claims ------------------------------");
     // =========================================================================
     //  Driven straight at the crossbar: it must answer with DECERR rather than
-    //  leave the master hanging.
-    m3_araddr = 32'h5000_0000;
+    //  leave the master hanging. The handshakes are watched through the
+    //  registered capture above: the crossbar consumes the request on the
+    //  clock edge and drops READY at that same edge, so polling VALID && READY
+    //  after the edge never sees the window. VALID is also dropped as soon as
+    //  the capture reports the handshake -- holding it longer would be an AXI
+    //  violation and would inject a second, spurious decode-error access.
+    m3_clr = 1'b1; @(posedge clk); #1; m3_clr = 1'b0;
+
+    m3_araddr  = 32'h5000_0000;
     m3_arvalid = 1'b1;
     guard = 0;
-    while (!(m_arvalid[3] && m_arready[3]) && guard < 50) begin
-      @(posedge clk); #1; guard = guard + 1;
-    end
-    chk(guard < 50, "the crossbar accepted a mis-decoded read");
-    @(posedge clk); #1;
+    while (!m3_ar_hs_q && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
     m3_arvalid = 1'b0;
+    chk(guard < 50, "the crossbar accepted a mis-decoded read");
     guard = 0;
-    while (!m_rvalid[3] && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
-    chk(m_rvalid[3], "a mis-decoded read got a response");
-    chk(m_rresp[3*2 +: 2] == 2'b11, "the response was DECERR");
-    chk(m_rlast[3], "the DECERR response was the last beat");
-    @(posedge clk); #1;
+    while (!m3_r_hs_q && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
+    chk(m3_r_hs_q, "a mis-decoded read got a response");
+    chk(m3_rresp_q == 2'b11, "the response was DECERR");
+    chk(m3_rlast_q, "the DECERR response was the last beat");
 
-    m3_awaddr = 32'h5000_0000;
+    m3_clr = 1'b1; @(posedge clk); #1; m3_clr = 1'b0;
+
+    m3_awaddr  = 32'h5000_0000;
     m3_awvalid = 1'b1;
     guard = 0;
-    while (!(m_awvalid[3] && m_awready[3]) && guard < 50) begin
-      @(posedge clk); #1; guard = guard + 1;
-    end
-    chk(guard < 50, "the crossbar accepted a mis-decoded write");
-    @(posedge clk); #1;
+    while (!m3_aw_hs_q && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
     m3_awvalid = 1'b0;
-    m3_wvalid  = 1'b1;
+    chk(guard < 50, "the crossbar accepted a mis-decoded write");
+    m3_wvalid = 1'b1;
     guard = 0;
-    while (!(m_wvalid[3] && m_wready[3]) && guard < 50) begin
-      @(posedge clk); #1; guard = guard + 1;
-    end
-    @(posedge clk); #1;
+    while (!m3_w_hs_q && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
     m3_wvalid = 1'b0;
+    chk(guard < 50, "the mis-decoded write data phase was swallowed");
     guard = 0;
-    while (!m_bvalid[3] && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
-    chk(m_bvalid[3], "a mis-decoded write got a B response");
-    chk(m_bresp[3*2 +: 2] == 2'b11, "the write response was DECERR");
+    while (!m3_b_hs_q && guard < 50) begin @(posedge clk); #1; guard = guard + 1; end
+    chk(m3_b_hs_q, "a mis-decoded write got a B response");
+    chk(m3_bresp_q == 2'b11, "the write response was DECERR");
 
     // the fabric must still work afterwards
     @(posedge clk); #1;
