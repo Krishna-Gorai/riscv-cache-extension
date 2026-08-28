@@ -60,7 +60,17 @@ module dcu_bypass
   output logic [31:0]          perf_rd_hit_o,
   output logic [31:0]          perf_rd_miss_o,
   output logic [31:0]          perf_wr_hit_o,
-  output logic [31:0]          perf_wr_miss_o
+  output logic [31:0]          perf_wr_miss_o,
+
+  // Same cycle accounting as the DCU, so the two architectures can be compared
+  // on where the time went and not just on how many cycles it took. There is
+  // no snoopy bus on this path and no second stage, so those two are tied off:
+  // that difference is exactly what the comparison is meant to expose.
+  output logic [31:0]          perf_busy_o,
+  output logic [31:0]          perf_stall_snoop_o,
+  output logic [31:0]          perf_stall_s2_o,
+  output logic [31:0]          perf_rd_wait_o,
+  output logic [31:0]          perf_wr_wait_o
 );
 
   // A request must be withdrawn once it has been granted. Holding it up until
@@ -137,11 +147,27 @@ module dcu_bypass
     if (!rst_ni) begin
       perf_rd_miss_o <= '0;
       perf_wr_miss_o <= '0;
+      perf_busy_o    <= '0;
+      perf_rd_wait_o <= '0;
+      perf_wr_wait_o <= '0;
     end else begin
       if ((state_q == S_RD_WAIT) && mem_rd_rvalid_i) perf_rd_miss_o <= perf_rd_miss_o + 32'd1;
       if ((state_q == S_WR) && mem_wr_gnt_i)    perf_wr_miss_o <= perf_wr_miss_o + 32'd1;
+
+      // Count from the cycle the request is ACCEPTED, not from the cycle
+      // after. The DCU counts its stage-1 cycle, so leaving the accept
+      // cycle out here would flatter this path by one cycle per access
+      // and make the comparison say something it should not.
+      if ((state_q != S_IDLE) || core_gnt_o)    perf_busy_o    <= perf_busy_o    + 32'd1;
+      if ((state_q == S_RD_REQ) || (state_q == S_RD_WAIT))
+                                                perf_rd_wait_o <= perf_rd_wait_o + 32'd1;
+      if (state_q == S_WR)                      perf_wr_wait_o <= perf_wr_wait_o + 32'd1;
     end
   end
+
+  // No snoopy bus and no second stage on this path.
+  assign perf_stall_snoop_o = '0;
+  assign perf_stall_s2_o    = '0;
 
   assign perf_rd_hit_o = '0;
   assign perf_wr_hit_o = '0;

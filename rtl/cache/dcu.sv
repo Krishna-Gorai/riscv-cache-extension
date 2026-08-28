@@ -109,7 +109,18 @@ module dcu
   output logic [31:0]           perf_rd_hit_o,
   output logic [31:0]           perf_rd_miss_o,
   output logic [31:0]           perf_wr_hit_o,
-  output logic [31:0]           perf_wr_miss_o
+  output logic [31:0]           perf_wr_miss_o,
+
+  // Where the cycles go. The hit rate says how often the cache answered
+  // locally; it says nothing about what an access COST, and the two are not
+  // the same question. A store hits or misses but always broadcasts an INV
+  // REQ, so a write-heavy kernel can have a fine hit rate and still be slow.
+  // These break a core access down into the four places it can wait.
+  output logic [31:0]           perf_busy_o,        // cycles with a core access in the DCU
+  output logic [31:0]           perf_stall_snoop_o, // stage 1 waiting for the snoopy-bus grant
+  output logic [31:0]           perf_stall_s2_o,    // stage 1 waiting for stage 2 to free up
+  output logic [31:0]           perf_rd_wait_o,     // stage 2 waiting for the MEM READ RESP
+  output logic [31:0]           perf_wr_wait_o      // stage 2 waiting for the MEM WRITE grant
 );
 
   // ---------------------------------------------------------------------------
@@ -558,17 +569,35 @@ module dcu
   assign retire_read  = s2_valid_q && s2_done && (s2_req_q == REQ_READ);
   assign retire_write = s2_valid_q && s2_done && (s2_req_q == REQ_WRITE) && !sc_fail;
 
+  // A snoop-injected INV REQ is not a core access and must not be charged to
+  // the core, or a busy snoopy bus would look like slow local memory.
+  logic s1_core_req, s2_core_req;
+  assign s1_core_req = s1_valid_q && ((s1_req_q == REQ_READ) || (s1_req_q == REQ_WRITE));
+  assign s2_core_req = s2_valid_q && ((s2_req_q == REQ_READ) || (s2_req_q == REQ_WRITE));
+
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      perf_rd_hit_o  <= '0;
-      perf_rd_miss_o <= '0;
-      perf_wr_hit_o  <= '0;
-      perf_wr_miss_o <= '0;
+      perf_rd_hit_o      <= '0;
+      perf_rd_miss_o     <= '0;
+      perf_wr_hit_o      <= '0;
+      perf_wr_miss_o     <= '0;
+      perf_busy_o        <= '0;
+      perf_stall_snoop_o <= '0;
+      perf_stall_s2_o    <= '0;
+      perf_rd_wait_o     <= '0;
+      perf_wr_wait_o     <= '0;
     end else begin
       if (retire_read  &&  hit) perf_rd_hit_o  <= perf_rd_hit_o  + 1;
       if (retire_read  && !hit) perf_rd_miss_o <= perf_rd_miss_o + 1;
       if (retire_write &&  hit) perf_wr_hit_o  <= perf_wr_hit_o  + 1;
       if (retire_write && !hit) perf_wr_miss_o <= perf_wr_miss_o + 1;
+
+      if (s1_core_req || s2_core_req)         perf_busy_o        <= perf_busy_o        + 1;
+      if (s1_core_req && !s1_snoop_ok)        perf_stall_snoop_o <= perf_stall_snoop_o + 1;
+      if (s1_core_req &&  s1_snoop_ok
+                      && !s2_ready)           perf_stall_s2_o    <= perf_stall_s2_o    + 1;
+      if (ccl_q == CCL_RD_WAIT)               perf_rd_wait_o     <= perf_rd_wait_o     + 1;
+      if (ccl_q == CCL_WR_WAIT)               perf_wr_wait_o     <= perf_wr_wait_o     + 1;
     end
   end
 

@@ -82,7 +82,12 @@ module soc_top
   output logic [NumPes*32-1:0]    perf_rd_hit_o,
   output logic [NumPes*32-1:0]    perf_rd_miss_o,
   output logic [NumPes*32-1:0]    perf_wr_hit_o,
-  output logic [NumPes*32-1:0]    perf_wr_miss_o
+  output logic [NumPes*32-1:0]    perf_wr_miss_o,
+  output logic [NumPes*32-1:0]    perf_busy_o,
+  output logic [NumPes*32-1:0]    perf_stall_snoop_o,
+  output logic [NumPes*32-1:0]    perf_stall_s2_o,
+  output logic [NumPes*32-1:0]    perf_rd_wait_o,
+  output logic [NumPes*32-1:0]    perf_wr_wait_o
 );
 
   // ---------------------------------------------------------------------------
@@ -372,7 +377,12 @@ module soc_top
       .perf_rd_hit_o   (perf_rd_hit_o),
       .perf_rd_miss_o  (perf_rd_miss_o),
       .perf_wr_hit_o   (perf_wr_hit_o),
-      .perf_wr_miss_o  (perf_wr_miss_o)
+      .perf_wr_miss_o  (perf_wr_miss_o),
+      .perf_busy_o (perf_busy_o),
+      .perf_stall_snoop_o (perf_stall_snoop_o),
+      .perf_stall_s2_o (perf_stall_s2_o),
+      .perf_rd_wait_o (perf_rd_wait_o),
+      .perf_wr_wait_o (perf_wr_wait_o)
     );
 
   end else begin : g_nodcache
@@ -414,7 +424,12 @@ module soc_top
         .perf_rd_hit_o   (perf_rd_hit_o [p*32 +: 32]),
         .perf_rd_miss_o  (perf_rd_miss_o[p*32 +: 32]),
         .perf_wr_hit_o   (perf_wr_hit_o [p*32 +: 32]),
-        .perf_wr_miss_o  (perf_wr_miss_o[p*32 +: 32])
+        .perf_wr_miss_o  (perf_wr_miss_o[p*32 +: 32]),
+        .perf_busy_o (perf_busy_o[p*32 +: 32]),
+        .perf_stall_snoop_o (perf_stall_snoop_o[p*32 +: 32]),
+        .perf_stall_s2_o (perf_stall_s2_o[p*32 +: 32]),
+        .perf_rd_wait_o (perf_rd_wait_o[p*32 +: 32]),
+        .perf_wr_wait_o (perf_wr_wait_o[p*32 +: 32])
       );
     end
 
