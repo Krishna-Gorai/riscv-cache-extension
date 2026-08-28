@@ -40,12 +40,24 @@ SECTIONS
         _itcm_vma = .;
         KEEP(*(.text.init))
         *(.text .text.*)
+        /* Pad the section to a word INSIDE the braces. The boot stub copies the
+         * image from SIMEM to the ITCM as a flat run of words, so it assumes
+         * the load and run layouts advance together. An ALIGN(4) at the START
+         * of the next section moves only the run address: the load address
+         * keeps counting from wherever .text happened to stop, and everything
+         * past .text is then copied two bytes out of place. .text stops on an
+         * odd half-word whenever its last instruction is a compressed one,
+         * which with rv32imc is a coin toss -- so this was silently corrupting
+         * .rodata in roughly half of all builds. Padding here grows the
+         * section itself, so both addresses move by the same amount. */
+        . = ALIGN(4);
     } > ITCM AT> SIMEM
 
     .rodata : {
         . = ALIGN(4);
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
+        . = ALIGN(4);
     } > ITCM AT> SIMEM
 
     .data : {
