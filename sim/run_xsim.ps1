@@ -86,7 +86,8 @@ $srcs = @(
   "$root\tb\unit\tb_axi.sv",
   "$root\tb\system\tb_coherent_subsystem.sv",
   "$root\tb\system\tb_pe.sv",
-  "$root\tb\system\tb_soc.sv"
+  "$root\tb\system\tb_soc.sv",
+  "$root\tb\system\tb_bench.sv"
 ) | Where-Object { Test-Path $_ }
 
 # tb/models/core_stub.sv is deliberately absent: it defines a module called
@@ -94,7 +95,10 @@ $srcs = @(
 # compiling it here would collide with the submodule.
 
 # The PE testbenches need the core; the cache-only ones do not.
-$needCore = @("tb_pe", "tb_soc", "tb_soc_nc") -contains $Tb
+$needCore = @("tb_pe", "tb_soc", "tb_soc_nc",
+              "tb_bench", "tb_bench_nc",
+              "tb_bench_l8", "tb_bench_nc_l8",
+              "tb_bench_l20", "tb_bench_nc_l20") -contains $Tb
 $allSrcs  = if ($needCore) { $cvSrcs + $srcs } else { $srcs }
 $allIncs  = if ($needCore) { $incdirs } else { @() }
 
