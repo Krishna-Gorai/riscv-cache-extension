@@ -1,0 +1,7 @@
+variant        baseline (Coherent=0)
+part           xczu7ev-ffvc1156-2-e
+clk_period_ns  10.000
+clk_freq_mhz   100.00
+wns_ns         0.228
+whs_ns         -0.111
+fmax_mhz       102.33
