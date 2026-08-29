@@ -145,7 +145,12 @@ if ($Saif -ne "") {
   #
   # Only the soc_top scope is logged, so that stripping "/$Tb/h" from the paths
   # leaves "u_soc/...", which is exactly where soc_top sits inside fpga_top.
-  @("open_saif `"$Saif`"",
+  # Tcl reads escape sequences inside a quoted string, so the Windows path
+  # goes in with forward slashes. Left alone, the separator before 'fpga'
+  # reads as a formfeed and the one before 'bench.saif' as a backspace, and
+  # open_saif is handed a name with those letters eaten.
+  $saifTcl = $Saif.Replace('\', '/')
+  @("open_saif `"$saifTcl`"",
     "log_saif [get_objects -r /$Tb/h/u_soc/*]",
     "run all",
     "close_saif",

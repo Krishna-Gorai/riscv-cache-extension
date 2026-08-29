@@ -58,3 +58,4 @@ dfx_runtime.txt
 iter_*_CongestedCLBsAndNets.txt
 sim/out_v*/
 tight_setup_hold_pins.txt
+sim/out_saif*/
