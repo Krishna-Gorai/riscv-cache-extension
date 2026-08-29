@@ -68,7 +68,7 @@ module axi_sram #(
 
   localparam logic [1:0] RESP_OKAY = 2'b00;
 
-  logic [DataW-1:0] mem [NumWords];
+  (* ram_style = "block" *) logic [DataW-1:0] mem [NumWords];
 
   // ===========================================================================
   //  Read channel
@@ -86,7 +86,23 @@ module axi_sram #(
   assign rresp_o   = RESP_OKAY;
   assign rlast_o   = (r_left_q == '0);
   assign rid_o     = r_id_q;
-  assign rdata_o   = mem[r_word_q];
+
+  // Next value of the read pointer, broken out so that the array can be read
+  // at it. Registering mem[r_word_d] makes the output hold mem[r_word_q]
+  // during the very cycle r_word_q names that word -- cycle for cycle what an
+  // asynchronous read of the array gave, but built from a synchronous read
+  // port, which is the only kind a block RAM has. Reading the array
+  // combinationally would have mapped these 256 KiB onto LUTRAM.
+  logic [IdxW-1:0] r_word_d;
+
+  always_comb begin
+    r_word_d = r_word_q;
+    case (r_state_q)
+      R_IDLE:  if (arvalid_i)                    r_word_d = araddr_i[ByteOffW +: IdxW];
+      R_DATA:  if (rready_i && (r_left_q != '0)) r_word_d = r_word_q + IdxW'(1);
+      default: ;
+    endcase
+  end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -96,10 +112,10 @@ module axi_sram #(
       r_id_q    <= '0;
       r_lat_q   <= '0;
     end else begin
+      r_word_q <= r_word_d;
       case (r_state_q)
         R_IDLE: begin
           if (arvalid_i) begin
-            r_word_q  <= araddr_i[ByteOffW +: IdxW];
             r_left_q  <= arlen_i;
             r_id_q    <= arid_i;
             r_lat_q   <= LatW'(AccessLat);
@@ -118,7 +134,6 @@ module axi_sram #(
               r_state_q <= R_IDLE;
             end else begin
               r_left_q <= r_left_q - LenW'(1);
-              r_word_q <= r_word_q + IdxW'(1);
             end
           end
         end
@@ -160,9 +175,6 @@ module axi_sram #(
 
         W_DATA: begin
           if (wvalid_i) begin
-            for (int unsigned b = 0; b < StrbW; b++) begin
-              if (wstrb_i[b]) mem[w_word_q][b*8 +: 8] <= wdata_i[b*8 +: 8];
-            end
             w_word_q <= w_word_q + IdxW'(1);
             if (wlast_i) w_state_q <= W_RESP;
           end
@@ -174,6 +186,44 @@ module axi_sram #(
 
         default: w_state_q <= W_IDLE;
       endcase
+    end
+  end
+
+  // ===========================================================================
+  //  Array read port
+  // ===========================================================================
+  // Read port of the array, plus the write-first bypass that keeps it exactly
+  // equivalent to the old asynchronous read: a byte written in the same cycle
+  // the read was issued is forwarded instead of the stale array output.
+  logic [DataW-1:0]  rdata_q, wfwd_q;
+  logic [StrbW-1:0]  coll_q;
+
+  logic [StrbW-1:0]  w_strb;
+  assign w_strb = ((w_state_q == W_DATA) && wvalid_i) ? wstrb_i : '0;
+
+  // The array itself is driven from blocks with no reset at all. A block RAM
+  // has no reset on its storage, so an array written under an asynchronous
+  // reset cannot be inferred as one -- synthesis says the memory pattern is
+  // unsupported and falls back to flip-flops, which for 2 Mbit is not a build
+  // that finishes. The write pointer and the FSM keep their reset above; only
+  // the storage moves out.
+  always_ff @(posedge clk_i) begin
+    for (int unsigned b = 0; b < StrbW; b++) begin
+      if (w_strb[b]) mem[w_word_q][b*8 +: 8] <= wdata_i[b*8 +: 8];
+    end
+  end
+
+  always_ff @(posedge clk_i) begin
+    rdata_q <= mem[r_word_d];
+    wfwd_q  <= wdata_i;
+    for (int unsigned b = 0; b < StrbW; b++) begin
+      coll_q[b] <= w_strb[b] && (w_word_q == r_word_d);
+    end
+  end
+
+  always_comb begin
+    for (int unsigned b = 0; b < StrbW; b++) begin
+      rdata_o[b*8 +: 8] = coll_q[b] ? wfwd_q[b*8 +: 8] : rdata_q[b*8 +: 8];
     end
   end
 

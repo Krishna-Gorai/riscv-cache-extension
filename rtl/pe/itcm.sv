@@ -42,7 +42,7 @@ module itcm #(
   output logic [DataW-1:0]     d_rdata_o
 );
 
-  logic [DataW-1:0] mem [NumWords];
+  (* ram_style = "block" *) logic [DataW-1:0] mem [NumWords];
 
   logic [IdxW-1:0] i_idx, d_idx;
   assign i_idx = i_addr_i[ByteOffW +: IdxW];
@@ -51,30 +51,36 @@ module itcm #(
   assign i_gnt_o = i_req_i;
   assign d_gnt_o = d_req_i;
 
-  // instruction port: read only
+  // Response valids: these are control, and they reset.
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       i_rvalid_o <= 1'b0;
+      d_rvalid_o <= 1'b0;
     end else begin
       i_rvalid_o <= i_gnt_o;
-      if (i_gnt_o) i_rdata_o <= mem[i_idx];
+      d_rvalid_o <= d_gnt_o;
     end
   end
 
+  // The array's two ports carry no reset, because a block RAM's storage has
+  // none: with the accesses inside the reset block above, synthesis rejects
+  // the pattern and falls back to flip-flops. Data read during reset is never
+  // looked at, since both valids are held low there.
+
+  // instruction port: read only
+  always_ff @(posedge clk_i) begin
+    if (i_gnt_o) i_rdata_o <= mem[i_idx];
+  end
+
   // data port: the only writer of the array
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      d_rvalid_o <= 1'b0;
-    end else begin
-      d_rvalid_o <= d_gnt_o;
-      if (d_gnt_o) begin
-        if (d_we_i) begin
-          for (int unsigned b = 0; b < WordBytes; b++) begin
-            if (d_be_i[b]) mem[d_idx][b*8 +: 8] <= d_wdata_i[b*8 +: 8];
-          end
-        end else begin
-          d_rdata_o <= mem[d_idx];
+  always_ff @(posedge clk_i) begin
+    if (d_gnt_o) begin
+      if (d_we_i) begin
+        for (int unsigned b = 0; b < WordBytes; b++) begin
+          if (d_be_i[b]) mem[d_idx][b*8 +: 8] <= d_wdata_i[b*8 +: 8];
         end
+      end else begin
+        d_rdata_o <= mem[d_idx];
       end
     end
   end

@@ -1,0 +1,7 @@
+variant        coherent (Coherent=1)
+part           xczu7ev-ffvc1156-2-e
+clk_period_ns  10.000
+clk_freq_mhz   100.00
+wns_ns         0.319
+whs_ns         0.012
+fmax_mhz       103.30

@@ -13,6 +13,7 @@ param(
   [switch]$Wave,
   [string]$Hex       = "",
   [string]$Plusargs  = "",
+  [string]$Saif      = "",   # dump switching activity for report_power
   [switch]$Reuse,          # reuse an existing snapshot: only the program image changed
   [string]$OutDir    = "sim\out",  # run directory; a second one lets two sims run at once
 
@@ -134,7 +135,22 @@ if ($Hex -ne "") {
 
 Write-Host "== xsim $Tb ==" -ForegroundColor Cyan
 $tcl = "run_$Tb.tcl"
-if ($Wave) {
+if ($Saif -ne "") {
+  # Switching activity for Vivado's power estimator. Vectorless estimation
+  # models this SoC as idle -- the four BUFGCE core clock gates have enables it
+  # cannot know, so it assumes the gated clocks are mostly off and reports
+  # essentially zero register power. Logging the SoC scope during a real
+  # benchmark and feeding the result to report_power replaces that guess with
+  # measured activity.
+  #
+  # Only the soc_top scope is logged, so that stripping "/$Tb/h" from the paths
+  # leaves "u_soc/...", which is exactly where soc_top sits inside fpga_top.
+  @("open_saif `"$Saif`"",
+    "log_saif [get_objects -r /$Tb/h/u_soc/*]",
+    "run all",
+    "close_saif",
+    "quit") | Set-Content -Encoding ascii $tcl
+} elseif ($Wave) {
   @("log_wave -recursive *", "run all", "quit") | Set-Content -Encoding ascii $tcl
 } else {
   @("run all", "quit") | Set-Content -Encoding ascii $tcl
