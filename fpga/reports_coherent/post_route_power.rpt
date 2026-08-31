@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date             : Sat Aug 29 18:03:15 2026
+| Date             : Mon Aug 31 18:30:41 2026
 | Host             : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command          : report_power -file C:/work/riscv-cache-extension/fpga/reports_coherent/post_route_power.rpt
 | Design           : fpga_top
@@ -30,14 +30,14 @@ Table of Contents
 ----------
 
 +--------------------------+--------------+
-| Total On-Chip Power (W)  | 0.805        |
+| Total On-Chip Power (W)  | 0.895        |
 | Design Power Budget (W)  | Unspecified* |
 | Power Budget Margin (W)  | NA           |
-| Dynamic (W)              | 0.189        |
-| Device Static (W)        | 0.616        |
+| Dynamic (W)              | 0.278        |
+| Device Static (W)        | 0.617        |
 | Effective TJA (C/W)      | 1.0          |
-| Max Ambient (C)          | 99.2         |
-| Junction Temperature (C) | 25.8         |
+| Max Ambient (C)          | 99.1         |
+| Junction Temperature (C) | 25.9         |
 | Confidence Level         | Low          |
 | Setting File             | ---          |
 | Simulation Activity File | ---          |
@@ -52,20 +52,20 @@ Table of Contents
 +----------------+-----------+----------+-----------+-----------------+
 | On-Chip        | Power (W) | Used     | Available | Utilization (%) |
 +----------------+-----------+----------+-----------+-----------------+
-| Clocks         |     0.053 |        4 |       --- |             --- |
-| CLB Logic      |     0.009 |    49765 |       --- |             --- |
-|   LUT as Logic |     0.008 |    26597 |    230400 |           11.54 |
-|   CARRY8       |    <0.001 |      548 |     28800 |            1.90 |
-|   Register     |    <0.001 |    15089 |    460800 |            3.27 |
-|   BUFG         |    <0.001 |        1 |        64 |            1.56 |
+| Clocks         |     0.059 |        4 |       --- |             --- |
+| CLB Logic      |     0.035 |    49832 |       --- |             --- |
+|   LUT as Logic |     0.034 |    26657 |    230400 |           11.57 |
+|   CARRY8       |     0.001 |      548 |     28800 |            1.90 |
+|   Register     |    <0.001 |    15155 |    460800 |            3.29 |
+|   BUFG         |    <0.001 |        2 |        64 |            3.13 |
 |   Others       |     0.000 |      200 |       --- |             --- |
 |   F7/F8 Muxes  |     0.000 |     1444 |    230400 |            0.63 |
-| Signals        |     0.012 |    41376 |       --- |             --- |
-| Block RAM      |     0.100 |      124 |       312 |           39.74 |
+| Signals        |     0.061 |    42192 |       --- |             --- |
+| Block RAM      |     0.107 |      124 |       312 |           39.74 |
 | DSPs           |     0.002 |       20 |      1728 |            1.16 |
 | I/O            |     0.013 |       13 |       360 |            3.61 |
-| Static Power   |     0.616 |          |           |                 |
-| Total          |     0.805 |          |           |                 |
+| Static Power   |     0.617 |          |           |                 |
+| Total          |     0.895 |          |           |                 |
 +----------------+-----------+----------+-----------+-----------------+
 
 
@@ -75,7 +75,7 @@ Table of Contents
 +------------------+-------------+-----------+-------------+------------+-------------+-------------+------------+
 | Source           | Voltage (V) | Total (A) | Dynamic (A) | Static (A) | Powerup (A) | Budget (A)  | Margin (A) |
 +------------------+-------------+-----------+-------------+------------+-------------+-------------+------------+
-| Vccint           |       0.850 |     0.339 |       0.202 |      0.137 |       NA    | Unspecified | NA         |
+| Vccint           |       0.850 |     0.445 |       0.307 |      0.138 |       NA    | Unspecified | NA         |
 | Vccint_io        |       0.850 |     0.071 |       0.001 |      0.070 |       NA    | Unspecified | NA         |
 | Vccbram          |       0.850 |     0.007 |       0.005 |      0.002 |       NA    | Unspecified | NA         |
 | Vccaux           |       1.800 |     0.148 |       0.000 |      0.148 |       NA    | Unspecified | NA         |
@@ -164,30 +164,35 @@ Table of Contents
 +-----------------------+-----------+
 | Name                  | Power (W) |
 +-----------------------+-----------+
-| fpga_top              |     0.189 |
+| fpga_top              |     0.278 |
 |   u_ibufds            |     0.003 |
-|   u_soc               |     0.174 |
-|     g_dcache.u_dcache |     0.062 |
-|       g_dcu[0].u_dcu  |     0.015 |
-|       g_dcu[1].u_dcu  |     0.016 |
-|       g_dcu[2].u_dcu  |     0.015 |
-|       g_dcu[3].u_dcu  |     0.015 |
-|     g_pe[0].u_pe      |     0.015 |
-|       u_core          |     0.008 |
-|       u_itcm          |     0.006 |
-|     g_pe[1].u_pe      |     0.015 |
-|       u_core          |     0.008 |
-|       u_itcm          |     0.006 |
-|     g_pe[2].u_pe      |     0.015 |
-|       u_core          |     0.009 |
-|       u_itcm          |     0.006 |
-|     g_pe[3].u_pe      |     0.016 |
-|       u_core          |     0.010 |
-|       u_itcm          |     0.006 |
+|   u_soc               |     0.262 |
+|     g_dcache.u_dcache |     0.106 |
+|       g_dcu[0].u_dcu  |     0.023 |
+|       g_dcu[1].u_dcu  |     0.032 |
+|       g_dcu[2].u_dcu  |     0.024 |
+|       g_dcu[3].u_dcu  |     0.025 |
+|       u_snoopy_bus    |     0.002 |
+|     g_pe[0].u_axi_dcu |     0.001 |
+|     g_pe[0].u_pe      |     0.025 |
+|       u_core          |     0.018 |
+|       u_itcm          |     0.007 |
+|     g_pe[1].u_axi_dcu |     0.001 |
+|     g_pe[1].u_pe      |     0.027 |
+|       u_core          |     0.019 |
+|       u_itcm          |     0.008 |
+|     g_pe[2].u_axi_dcu |     0.001 |
+|     g_pe[2].u_pe      |     0.024 |
+|       u_core          |     0.016 |
+|       u_itcm          |     0.007 |
+|     g_pe[3].u_axi_dcu |     0.001 |
+|     g_pe[3].u_pe      |     0.025 |
+|       u_core          |     0.017 |
+|       u_itcm          |     0.007 |
 |     u_ctrl            |     0.001 |
-|     u_sdmem           |     0.026 |
-|     u_simem           |     0.012 |
-|     u_xbar            |     0.005 |
+|     u_sdmem           |     0.025 |
+|     u_simem           |     0.013 |
+|     u_xbar            |     0.007 |
 +-----------------------+-----------+
 
 

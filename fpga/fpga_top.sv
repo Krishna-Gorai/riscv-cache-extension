@@ -60,7 +60,20 @@ module fpga_top #(
   // ---------------------------------------------------------------------------
   (* ASYNC_REG = "TRUE" *) logic [1:0] rst_sync_q;
   logic [6:0] rst_cnt_q;
-  logic       rst_n_q;
+
+  //  This one register drives every asynchronous reset in the SoC, which is
+  //  around fifteen thousand CLR pins spread over the die. Left as a single
+  //  driver the removal check on reset release fails on distance alone: the
+  //  worst path measured 2.419 ns from here to a flop in the far PE, of which
+  //  2.336 ns (97%) was routing, and it failed by 30 ps. It is placement luck
+  //  either way -- the same RTL met the check in one build and missed it in
+  //  two others -- so the fix is to stop asking one wire to cross the chip.
+  //
+  //  MAX_FANOUT makes the tool replicate this register and place each copy
+  //  near the flops it clears. Replication is the right mechanism rather than
+  //  writing copies by hand, because soc_top takes a single rst_ni and adding
+  //  a per-PE reset port would change the design the simulator verifies.
+  (* MAX_FANOUT = 200 *) logic rst_n_q;
 
   always_ff @(posedge clk) begin
     rst_sync_q <= {rst_sync_q[0], cpu_reset_i};

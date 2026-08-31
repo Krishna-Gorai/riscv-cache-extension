@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date             : Sat Aug 29 21:00:17 2026
+| Date             : Mon Aug 31 19:54:33 2026
 | Host             : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command          : report_power -file C:/work/riscv-cache-extension/fpga/reports_baseline/post_route_power.rpt
 | Design           : fpga_top
@@ -30,10 +30,10 @@ Table of Contents
 ----------
 
 +--------------------------+--------------+
-| Total On-Chip Power (W)  | 0.751        |
+| Total On-Chip Power (W)  | 0.758        |
 | Design Power Budget (W)  | Unspecified* |
 | Power Budget Margin (W)  | NA           |
-| Dynamic (W)              | 0.135        |
+| Dynamic (W)              | 0.142        |
 | Device Static (W)        | 0.616        |
 | Effective TJA (C/W)      | 1.0          |
 | Max Ambient (C)          | 99.3         |
@@ -52,20 +52,19 @@ Table of Contents
 +----------------+-----------+----------+-----------+-----------------+
 | On-Chip        | Power (W) | Used     | Available | Utilization (%) |
 +----------------+-----------+----------+-----------+-----------------+
-| Clocks         |     0.043 |        4 |       --- |             --- |
-| CLB Logic      |     0.009 |    40199 |       --- |             --- |
-|   LUT as Logic |     0.008 |    21470 |    230400 |            9.32 |
+| Clocks         |     0.048 |        4 |       --- |             --- |
+| CLB Logic      |     0.009 |    40254 |       --- |             --- |
+|   LUT as Logic |     0.008 |    21518 |    230400 |            9.34 |
 |   CARRY8       |    <0.001 |      412 |     28800 |            1.43 |
-|   Register     |    <0.001 |    11609 |    460800 |            2.52 |
-|   BUFG         |    <0.001 |        1 |        64 |            1.56 |
+|   Register     |    <0.001 |    11665 |    460800 |            2.53 |
 |   Others       |     0.000 |      172 |       --- |             --- |
 |   F7/F8 Muxes  |     0.000 |     1366 |    230400 |            0.59 |
-| Signals        |     0.012 |    32110 |       --- |             --- |
-| Block RAM      |     0.058 |      104 |       312 |           33.33 |
+| Signals        |     0.013 |    32843 |       --- |             --- |
+| Block RAM      |     0.059 |      104 |       312 |           33.33 |
 | DSPs           |     0.002 |       20 |      1728 |            1.16 |
 | I/O            |     0.012 |       13 |       360 |            3.61 |
 | Static Power   |     0.616 |          |           |                 |
-| Total          |     0.751 |          |           |                 |
+| Total          |     0.758 |          |           |                 |
 +----------------+-----------+----------+-----------+-----------------+
 
 
@@ -75,7 +74,7 @@ Table of Contents
 +------------------+-------------+-----------+-------------+------------+-------------+-------------+------------+
 | Source           | Voltage (V) | Total (A) | Dynamic (A) | Static (A) | Powerup (A) | Budget (A)  | Margin (A) |
 +------------------+-------------+-----------+-------------+------------+-------------+-------------+------------+
-| Vccint           |       0.850 |     0.280 |       0.143 |      0.137 |       NA    | Unspecified | NA         |
+| Vccint           |       0.850 |     0.289 |       0.152 |      0.137 |       NA    | Unspecified | NA         |
 | Vccint_io        |       0.850 |     0.071 |       0.001 |      0.070 |       NA    | Unspecified | NA         |
 | Vccbram          |       0.850 |     0.004 |       0.002 |      0.002 |       NA    | Unspecified | NA         |
 | Vccaux           |       1.800 |     0.148 |       0.000 |      0.148 |       NA    | Unspecified | NA         |
@@ -164,27 +163,27 @@ Table of Contents
 +-------------------------------------+-----------+
 | Name                                | Power (W) |
 +-------------------------------------+-----------+
-| fpga_top                            |     0.135 |
+| fpga_top                            |     0.142 |
 |   u_ibufds                          |     0.003 |
-|   u_soc                             |     0.121 |
+|   u_soc                             |     0.128 |
 |     g_nodcache.g_bypass[0].u_bypass |     0.001 |
 |     g_nodcache.g_bypass[1].u_bypass |     0.001 |
 |     g_nodcache.g_bypass[2].u_bypass |     0.001 |
 |     g_nodcache.g_bypass[3].u_bypass |     0.001 |
-|     g_pe[0].u_pe                    |     0.016 |
-|       u_core                        |     0.009 |
-|       u_itcm                        |     0.006 |
-|     g_pe[1].u_pe                    |     0.016 |
+|     g_pe[0].u_pe                    |     0.017 |
 |       u_core                        |     0.010 |
-|       u_itcm                        |     0.006 |
-|     g_pe[2].u_pe                    |     0.017 |
-|       u_core                        |     0.009 |
 |       u_itcm                        |     0.007 |
-|     g_pe[3].u_pe                    |     0.016 |
-|       u_core                        |     0.009 |
+|     g_pe[1].u_pe                    |     0.019 |
+|       u_core                        |     0.012 |
+|       u_itcm                        |     0.007 |
+|     g_pe[2].u_pe                    |     0.018 |
+|       u_core                        |     0.011 |
+|       u_itcm                        |     0.007 |
+|     g_pe[3].u_pe                    |     0.017 |
+|       u_core                        |     0.010 |
 |       u_itcm                        |     0.007 |
 |     u_ctrl                          |     0.001 |
-|     u_sdmem                         |     0.026 |
+|     u_sdmem                         |     0.025 |
 |     u_simem                         |     0.012 |
 |     u_xbar                          |     0.006 |
 +-------------------------------------+-----------+
