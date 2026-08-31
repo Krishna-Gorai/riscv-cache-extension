@@ -59,3 +59,4 @@ iter_*_CongestedCLBsAndNets.txt
 sim/out_v*/
 tight_setup_hold_pins.txt
 sim/out_saif*/
+fpga/vivado_prj_*/
