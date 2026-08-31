@@ -1,0 +1,10 @@
+variant        coherent (project mode)
+project        C:/work/riscv-cache-extension/fpga/vivado_prj_coherent/coherent.xpr
+synth strategy Flow_PerfOptimized_high
+impl strategy  Vivado Implementation Defaults
+clk_period_ns  10.000
+wns_ns         0.091
+whs_ns         -0.030
+fmax_mhz       100.92
+
+Not comparable with fpga/reports_coherent/: different strategies.
