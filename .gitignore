@@ -67,3 +67,7 @@ sim/out_netlist/
 sim_*.log
 vivado_gui.log
 fpga/xil_*.tmp
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/build*.log

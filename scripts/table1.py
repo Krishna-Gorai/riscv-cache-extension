@@ -163,9 +163,25 @@ def main():
         return
 
     print()
+    # The clock is whatever the build was constrained to, not a constant: a
+    # header that says 100 MHz over a 75 MHz build is a quietly wrong number in
+    # the one place a reader trusts without checking.
+    freq = None
+    smpath = os.path.join(ROOT, "fpga", "reports_" + variant, "summary.txt")
+    sm = ""
+    if os.path.exists(smpath):
+        sm = io.open(smpath, encoding="utf-8", errors="replace").read()
+    for line in sm.splitlines():
+        f = line.split()
+        if len(f) == 2 and f[0] == "clk_freq_mhz":
+            try:
+                freq = float(f[1])
+            except ValueError:
+                pass
     print("TABLE I.  POST-IMPLEMENTATION RESOURCE UTILISATION -- %s"
           % variant.upper())
-    print("          ZCU104, xczu7ev-ffvc1156-2-e, 100 MHz, %d PEs" % NPE)
+    print("          ZCU104, xczu7ev-ffvc1156-2-e, %s, %d PEs"
+          % ("%.0f MHz" % freq if freq else "unknown clock", NPE))
     print()
     print("%-30s %4s %8s %8s %7s %6s" % ("Module", "x", "LUTs", "FFs", "BRAM", "DSPs"))
     print("-" * 68)
