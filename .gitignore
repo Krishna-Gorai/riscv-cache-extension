@@ -71,3 +71,6 @@ paper/*.aux
 paper/*.log
 paper/*.out
 paper/build*.log
+sim/out_lat_*/
+sim/out_sweep_*/
+sweep_*.log
