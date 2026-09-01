@@ -94,8 +94,13 @@ def thousands(x, _pos):
     return "%g" % (x / 1000.0)
 
 
-def grouped_bars(ax, groups, series, values, colours, hatches):
-    """One cluster per group, one bar per series, hatched for greyscale."""
+def grouped_bars(ax, groups, series, values, colours, hatches, label_fmt=None):
+    """One cluster per group, one bar per series, hatched for greyscale.
+
+    label_fmt, when given, writes each bar's value above it. With four bars to a
+    cluster the labels are rotated upright: set horizontally they are wider than
+    the bars they belong to and run into their neighbours.
+    """
     n = len(series)
     width = 0.8 / n
     xs = range(len(groups))
@@ -104,6 +109,10 @@ def grouped_bars(ax, groups, series, values, colours, hatches):
         ax.bar(offs, values[i], width=width * 0.92, label=name,
                color=colours[i], edgecolor="#333333", linewidth=0.5,
                hatch=hatches[i], zorder=3)
+        if label_fmt:
+            for x, v in zip(offs, values[i]):
+                ax.text(x, v + 0.6, label_fmt % v, ha="center", va="bottom",
+                        fontsize=5, rotation=90, color="#262626", zorder=4)
     ax.set_xticks(list(xs))
     ax.set_xticklabels(groups)
     ax.set_xlim(-0.5, len(groups) - 0.5)
@@ -139,12 +148,13 @@ def fig_capacity(style):
     if style == "bar":
         groups = [str(n) for n in sizes]
         grouped_bars(ax1, groups, labels, cyc, colours, hatches)
-        grouped_bars(ax2, groups, labels, hit, colours, hatches)
+        grouped_bars(ax2, groups, labels, hit, colours, hatches, label_fmt="%.1f")
         frame(ax1, bars=True)
         frame(ax2, bars=True)
         # Hit rate starts at 50 so the collapse is not compressed into the top
         # tenth of the panel; the axis break is obvious from the tick labels.
-        ax2.set_ylim(50, 104)
+        # The headroom above 100 is for the upright value labels, not padding.
+        ax2.set_ylim(50, 112)
     else:
         for i, (_cfg, lbl, colour, marker, ls, _h) in enumerate(CAP_SERIES):
             common = dict(color=colour, marker=marker, markersize=3.6,
