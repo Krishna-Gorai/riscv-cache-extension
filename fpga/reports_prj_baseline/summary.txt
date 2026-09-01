@@ -1,0 +1,11 @@
+variant        baseline (project mode)
+project        C:/work/riscv-cache-extension/fpga/vivado_prj_baseline/baseline.xpr
+synth strategy Vivado Synthesis Defaults
+impl strategy  Vivado Implementation Defaults
+clk_period_ns  13.333
+clk_freq_mhz   75.00
+wns_ns         1.273
+whs_ns         0.011
+fmax_mhz       82.92
+
+Not comparable with fpga/reports_baseline/: different strategies.

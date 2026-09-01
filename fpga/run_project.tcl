@@ -70,7 +70,15 @@ report_ram_utilization    -file [file join $outdir post_route_ram.rpt]
 
 set wns [get_property SLACK [get_timing_paths -delay_type max]]
 set whs [get_property SLACK [get_timing_paths -delay_type min]]
-set period 10.0
+
+# The clock is the 300 MHz board clock divided by the project's own ClkDiv
+# generic, so read it back rather than assuming: a build at another frequency
+# would otherwise report an Fmax computed against the wrong period.
+set clkdiv 3
+foreach g [get_property generic [get_filesets sources_1]] {
+  if {[string match "ClkDiv=*" $g]} { set clkdiv [string range $g 7 end] }
+}
+set period [expr {$clkdiv * 1000.0/300.0}]
 
 set fh [open [file join $outdir summary.txt] w]
 puts $fh "variant        $variant (project mode)"
@@ -78,6 +86,7 @@ puts $fh "project        $xpr"
 puts $fh "synth strategy [get_property strategy [get_runs synth_1]]"
 puts $fh "impl strategy  [get_property strategy [get_runs impl_1]]"
 puts $fh "clk_period_ns  [format %.3f $period]"
+puts $fh "clk_freq_mhz   [format %.2f [expr {1000.0/$period}]]"
 puts $fh "wns_ns         [format %.3f $wns]"
 puts $fh "whs_ns         [format %.3f $whs]"
 puts $fh "fmax_mhz       [format %.2f [expr {1000.0/($period - $wns)}]]"

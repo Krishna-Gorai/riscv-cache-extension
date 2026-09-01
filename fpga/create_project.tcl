@@ -20,7 +20,9 @@
 set root [file normalize [file join [file dirname [info script]] ..]]
 
 set variant [lindex $argv 0]
+set period  [lindex $argv 1]
 if {$variant eq ""} { set variant "coherent" }
+if {$period  eq ""} { set period  10.0 }
 
 switch -- $variant {
   coherent { set coh 1 }
@@ -28,8 +30,14 @@ switch -- $variant {
   default  { error "variant must be 'coherent' or 'baseline', got '$variant'" }
 }
 
-# 300 MHz board clock / 3 = 100 MHz, the same divide run_impl.tcl uses.
-set clkdiv 3
+# 300 MHz board clock / ClkDiv, the same integer divide run_impl.tcl uses.
+# BUFGCE_DIV divides by 1..8, so the reachable frequencies are 300/N and
+# nothing between them: 150, 100, 75, 60, 50 MHz and so on.
+set clkdiv [expr {int(round($period / (1000.0/300.0)))}]
+if {$clkdiv < 1} { set clkdiv 1 }
+if {$clkdiv > 8} { set clkdiv 8 }
+set actual_period [expr {$clkdiv * 1000.0/300.0}]
+set actual_freq   [expr {1000.0/$actual_period}]
 set part   xczu7ev-ffvc1156-2-e
 set prjdir [file join $root fpga vivado_prj_$variant]
 
@@ -94,9 +102,11 @@ set_property include_dirs [list [file join $cv_rtl include]] [get_filesets sourc
 set_property generic [list Coherent=$coh ClkDiv=$clkdiv] [get_filesets sources_1]
 set_property verilog_define {SYNTHESIS} [get_filesets sources_1]
 
-# The batch flow is single-run and keeps the tool inside this host's memory;
-# match it so a GUI run does not thrash an 8 GB machine.
-set_property strategy Flow_PerfOptimized_high [get_runs synth_1]
+# Tool defaults, deliberately. Flow_PerfOptimized_high was tried and measured
+# worse on this design: 29940 LUT against the default flow's 26597 for the same
+# RTL, and it still finished slower, because the binding constraint here is the
+# length of a wire rather than the depth of any logic cone. Leaving the runs at
+# their defaults also keeps a GUI build comparable with run_impl.tcl.
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-verilog_define SYNTHESIS} -objects [get_runs synth_1]
 
 update_compile_order -fileset sources_1
@@ -106,7 +116,7 @@ puts "=============================================================="
 puts " project  : [file join $prjdir $variant.xpr]"
 puts " variant  : $variant  (Coherent=$coh)"
 puts " part     : $part"
-puts " top      : fpga_top   ClkDiv=$clkdiv -> 100 MHz"
+puts " top      : fpga_top   ClkDiv=$clkdiv -> [format %.3f $actual_period] ns ([format %.2f $actual_freq] MHz)"
 puts ""
 puts " open with:  vivado [file join $prjdir $variant.xpr]"
 puts ""

@@ -25,7 +25,26 @@ SITES = [
     ("BUFGCE",         "BUFGCE"),
 ]
 
-TARGET_NS = 10.0   # 300 MHz board clock / BUFGCE_DIV of 3
+DEFAULT_NS = 10.0   # 300 MHz board clock / BUFGCE_DIV of 3
+
+
+def target_ns(d):
+    """The clock period this build was actually constrained to.
+
+    A build at another divider setting reports a different period, and Fmax
+    computed against the wrong one is silently wrong rather than obviously so,
+    so read it back from the run's own summary instead of assuming.
+    """
+    text = read(os.path.join(d, "summary.txt"))
+    if text:
+        for line in text.splitlines():
+            f = line.split()
+            if len(f) == 2 and f[0] == "clk_period_ns":
+                try:
+                    return float(f[1])
+                except ValueError:
+                    pass
+    return DEFAULT_NS
 
 
 def read(path):
@@ -162,6 +181,7 @@ def hier(text):
 def load(variant):
     d = os.path.join(ROOT, "fpga", "reports_" + variant)
     return {
+        "period": target_ns(d),
         "util":   util(read(os.path.join(d, "post_route_util.rpt"))),
         "timing": timing(read(os.path.join(d, "post_route_timing.rpt"))),
         "power":  power(read(os.path.join(d, "post_route_power.rpt"))),
@@ -177,7 +197,7 @@ def main():
     span = 26 + w * (len(variants) + (1 if len(variants) == 2 else 0))
 
     print()
-    print("ZCU104   xczu7ev-ffvc1156-2-e   100 MHz target   post-route")
+    print("ZCU104   xczu7ev-ffvc1156-2-e   post-route")
     print("=" * span)
     head = "%-26s" % "" + "".join("%*s" % (w, v) for v in variants)
     if len(variants) == 2:
@@ -210,9 +230,10 @@ def main():
     row("endpoints", lambda D: D["timing"].get("endpoints"), "%d")
     row("failing setup", lambda D: D["timing"].get("failing"), "%d")
     row("failing hold", lambda D: D["timing"].get("hold_failing"), "%d")
+    row("target (MHz)", lambda D: 1000.0 / D["period"], "%.2f")
     row("Fmax (MHz)",
         lambda D: (None if D["timing"].get("WNS") is None
-                   else 1000.0 / (TARGET_NS - D["timing"]["WNS"])), "%.2f")
+                   else 1000.0 / (D["period"] - D["timing"]["WNS"])), "%.2f")
     print("%-26s" % "all constraints met" + "".join(
         "%*s" % (w, "yes" if data[v]["timing"].get("met") else "NO") for v in variants))
 
