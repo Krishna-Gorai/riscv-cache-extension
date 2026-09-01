@@ -60,3 +60,9 @@ sim/out_v*/
 tight_setup_hold_pins.txt
 sim/out_saif*/
 fpga/vivado_prj_*/
+fpga/netlist_*.v
+sim/out_chk/
+sim/out_fpga/
+sim/out_netlist/
+sim_*.log
+vivado_gui.log

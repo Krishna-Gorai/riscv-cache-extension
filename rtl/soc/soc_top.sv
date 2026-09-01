@@ -52,6 +52,10 @@ module soc_top
 
   parameter  int unsigned ItcmBytes  = 32768,
   parameter  int unsigned SimemBytes = 32768,
+  // Program image baked into the shared instruction memory, which is where the
+  // cores boot from (BootAddr sits in that region). Empty for simulation: the
+  // testbenches load it through the backdoor.
+  parameter  string       SimemInit  = "",
   parameter  int unsigned SdmemBytes = 262144,
 
   parameter  logic [31:0] BootAddr   = 32'h2000_0000,
@@ -543,7 +547,7 @@ module soc_top
   // ===========================================================================
   axi_sram #(
     .AddrW (AddrW), .DataW (DataW), .IdW (IdW), .LenW (LenW),
-    .SizeBytes (SimemBytes), .AccessLat (MemLat)
+    .SizeBytes (SimemBytes), .AccessLat (MemLat), .InitFile (SimemInit)
   ) u_simem (
     .clk_i     (clk_i),
     .rst_ni    (rst_ni),

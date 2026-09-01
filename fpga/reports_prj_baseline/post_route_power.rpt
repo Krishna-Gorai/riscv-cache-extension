@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date             : Tue Sep  1 08:40:23 2026
+| Date             : Tue Sep  1 11:59:14 2026
 | Host             : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command          : report_power -file C:/work/riscv-cache-extension/fpga/reports_prj_baseline/post_route_power.rpt
 | Design           : fpga_top
@@ -59,7 +59,7 @@ Table of Contents
 |   Register     |    <0.001 |    11668 |    460800 |            2.53 |
 |   Others       |     0.000 |      172 |       --- |             --- |
 |   F7/F8 Muxes  |     0.000 |     1366 |    230400 |            0.59 |
-| Signals        |     0.010 |    32806 |       --- |             --- |
+| Signals        |     0.009 |    32806 |       --- |             --- |
 | Block RAM      |     0.042 |      104 |       312 |           33.33 |
 | DSPs           |     0.002 |       20 |      1728 |            1.16 |
 | I/O            |     0.010 |       13 |       360 |            3.61 |

@@ -21,6 +21,7 @@ set root [file normalize [file join [file dirname [info script]] ..]]
 
 set variant [lindex $argv 0]
 set period  [lindex $argv 1]
+set program [lindex $argv 2]
 if {$variant eq ""} { set variant "coherent" }
 if {$period  eq ""} { set period  10.0 }
 
@@ -39,6 +40,15 @@ if {$clkdiv > 8} { set clkdiv 8 }
 set actual_period [expr {$clkdiv * 1000.0/300.0}]
 set actual_freq   [expr {1000.0/$actual_period}]
 set part   xczu7ev-ffvc1156-2-e
+# The program baked into the shared instruction memory. Without one the
+# implemented design has nothing to fetch, so this defaults to the SoC smoke
+# test rather than to nothing.
+if {$program eq ""} {
+  set program [file join $root sw build soc_par_smoke.hex]
+}
+set program [string map {\\ /} [file normalize $program]]
+if {![file exists $program]} { error "no program image at $program" }
+
 set prjdir [file join $root fpga vivado_prj_$variant]
 
 create_project -force $variant $prjdir -part $part
@@ -99,7 +109,7 @@ set_property include_dirs [list [file join $cv_rtl include]] [get_filesets sourc
 
 # The cache extension is one parameter, and SYNTHESIS swaps the behavioural
 # clock gate for the BUFGCE cell.
-set_property generic [list Coherent=$coh ClkDiv=$clkdiv] [get_filesets sources_1]
+set_property generic [list Coherent=$coh ClkDiv=$clkdiv ProgramHex=$program] [get_filesets sources_1]
 set_property verilog_define {SYNTHESIS} [get_filesets sources_1]
 
 # Tool defaults, deliberately. Flow_PerfOptimized_high was tried and measured

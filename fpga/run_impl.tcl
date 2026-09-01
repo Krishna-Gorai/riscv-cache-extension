@@ -23,6 +23,7 @@ set root [file normalize [file join [file dirname [info script]] ..]]
 
 set variant [lindex $argv 0]
 set period  [lindex $argv 1]
+set program [lindex $argv 2]
 if {$variant eq ""} { set variant "coherent" }
 if {$period  eq ""} { set period  10.0 }
 
@@ -39,12 +40,22 @@ if {$clkdiv > 8} { set clkdiv 8 }
 set actual_period [expr {$clkdiv * 1000.0/300.0}]
 set actual_freq   [expr {1000.0/$actual_period}]
 
+# The program baked into the shared instruction memory. Without one the
+# implemented design has nothing to fetch, so this defaults to the SoC smoke
+# test rather than to nothing.
+if {$program eq ""} {
+  set program [file join $root sw build soc_par_smoke.hex]
+}
+set program [string map {\\ /} [file normalize $program]]
+if {![file exists $program]} { error "no program image at $program" }
+
 set outdir [file join $root fpga reports_$variant]
 file mkdir $outdir
 
 puts "=============================================================="
 puts " variant   : $variant  (Coherent=$coh)"
 puts " ClkDiv    : $clkdiv   -> [format %.3f $actual_period] ns  ([format %.2f $actual_freq] MHz)"
+puts " program   : $program"
 puts " reports   : $outdir"
 puts "=============================================================="
 
@@ -103,6 +114,7 @@ synth_design -top fpga_top -part $part \
   -include_dirs [list [file join $cv_rtl include]] \
   -generic Coherent=$coh \
   -generic ClkDiv=$clkdiv \
+  -generic ProgramHex=$program \
   -verilog_define SYNTHESIS
 
 write_checkpoint -force [file join $outdir post_synth.dcp]

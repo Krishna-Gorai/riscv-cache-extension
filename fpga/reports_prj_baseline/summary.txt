@@ -4,8 +4,8 @@ synth strategy Vivado Synthesis Defaults
 impl strategy  Vivado Implementation Defaults
 clk_period_ns  13.333
 clk_freq_mhz   75.00
-wns_ns         1.273
-whs_ns         0.011
-fmax_mhz       82.92
+wns_ns         0.929
+whs_ns         0.010
+fmax_mhz       80.62
 
 Not comparable with fpga/reports_baseline/: different strategies.

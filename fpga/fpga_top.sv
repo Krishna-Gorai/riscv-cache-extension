@@ -27,7 +27,10 @@ module fpga_top #(
   parameter int unsigned NumPes   = 4,
   parameter int unsigned NumWays  = 2,
   parameter int unsigned NumSets  = 64,
-  parameter int unsigned ClkDiv   = 3       // 300 MHz / ClkDiv = SoC clock
+  parameter int unsigned ClkDiv   = 3,      // 300 MHz / ClkDiv = SoC clock
+  // Program baked into the shared instruction memory. The build passes an
+  // absolute path; without one the implemented design has nothing to fetch.
+  parameter string       ProgramHex = ""
 ) (
   input  logic       clk300_p_i,
   input  logic       clk300_n_i,
@@ -116,10 +119,11 @@ module fpga_top #(
   logic [NumPes*32-1:0] p_stall_snoop, p_stall_s2, p_rd_wait, p_wr_wait;
 
   soc_top #(
-    .NumPes   (NumPes),
-    .Coherent (Coherent),
-    .NumWays  (NumWays),
-    .NumSets  (NumSets)
+    .NumPes    (NumPes),
+    .Coherent  (Coherent),
+    .NumWays   (NumWays),
+    .NumSets   (NumSets),
+    .SimemInit (ProgramHex)
   ) u_soc (
     .clk_i               (clk),
     .rst_ni              (rst_n_q),

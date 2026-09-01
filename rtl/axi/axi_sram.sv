@@ -25,6 +25,11 @@ module axi_sram #(
   parameter  int unsigned LenW      = 8,
   parameter  int unsigned SizeBytes = 262144,
   parameter  int unsigned AccessLat = 2,
+  // A program to bake into the memory's contents. Vivado turns $readmemh in an
+  // initial block into the block RAM's INIT strings, so naming a file here puts
+  // it in the bitstream. Left empty the memory comes up zeroed, which is what
+  // every testbench wants -- they load through the backdoor below instead.
+  parameter  string       InitFile  = "",
 
   localparam int unsigned StrbW    = DataW/8,
   localparam int unsigned NumWords = SizeBytes / (DataW/8),
@@ -227,11 +232,17 @@ module axi_sram #(
     end
   end
 
-`ifndef SYNTHESIS
+  // Deliberately outside the `ifndef SYNTHESIS below. The testbenches reach into
+  // the hierarchy to load a program, and a netlist has no hierarchy to reach
+  // into: without this the implemented design boots into an empty memory and
+  // fetches zeros, which is a design that cannot run rather than one that runs
+  // badly.
   initial begin
     for (int unsigned i = 0; i < NumWords; i++) mem[i] = '0;
+    if (InitFile != "") $readmemh(InitFile, mem);
   end
 
+`ifndef SYNTHESIS
   function automatic void load_hex(input string path);
     $readmemh(path, mem);
   endfunction

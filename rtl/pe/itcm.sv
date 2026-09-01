@@ -85,12 +85,14 @@ module itcm #(
     end
   end
 
-`ifndef SYNTHESIS
+  // Outside `ifndef SYNTHESIS for the same reason as axi_sram: this is the only
+  // route a program has into an implemented design.
   initial begin
     for (int unsigned i = 0; i < NumWords; i++) mem[i] = '0;
     if (InitFile != "") $readmemh(InitFile, mem);
   end
 
+`ifndef SYNTHESIS
   // Backdoor program load, used by the testbenches until the CPU-driven
   // transfer from the shared instruction memory is wired up.
   function automatic void load_hex(input string path);
