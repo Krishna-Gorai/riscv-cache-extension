@@ -98,7 +98,17 @@ if ($LASTEXITCODE -ne 0) { Pop-Location; throw "xelab failed" }
 
 Write-Host "== xsim ==" -ForegroundColor Cyan
 $tcl = "run_fpga.tcl"
-if ($Wave) { @("log_wave -recursive *", "run all", "quit") | Set-Content -Encoding ascii $tcl }
+if ($Wave) {
+  # Bounded on purpose. "log_wave -recursive *" at this level would capture
+  # every net of a 22 MB netlist for twenty-five thousand cycles, which is tens
+  # of gigabytes and hours of writing. The testbench scope plus fpga_top's own
+  # signals carry what the run is actually about: the board pins, the clock and
+  # reset sequence, and the done and exit-code probes.
+  @("log_wave [get_objects /tb_fpga_top/*]",
+    "log_wave [get_objects /tb_fpga_top/dut/*]",
+    "run all",
+    "quit") | Set-Content -Encoding ascii $tcl
+}
 else       { @("run all", "quit") | Set-Content -Encoding ascii $tcl }
 & $xsim tb_fpga_top_snap -tclbatch $tcl --nolog
 $rc = $LASTEXITCODE
