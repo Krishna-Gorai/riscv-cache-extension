@@ -223,7 +223,18 @@ $N$ & Working & 2-way & 4-way & 2-way & 2-way \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:capacity} gives the result. At the two sizes whose working set
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_capacity.pdf}
+\caption{FFT execution time and read hit rate against problem size for four
+cache configurations. The two 2\,KiB configurations diverge from the two larger
+ones exactly where the working set stops fitting, and doubling associativity
+does not close the gap. The 8\,KiB and 16\,KiB curves coincide at every point.}
+\label{fig:capacity}
+\end{figure}
+
+Table~\ref{tab:capacity} and Fig.~\ref{fig:capacity} give the result. At the
+two sizes whose working set
 fits, all four configurations are bit-identical, which establishes that nothing
 but the parameter under test is moving. At $N{=}512$ the stated configuration
 loses 31.2 points of read hit rate. Doubling associativity returns 4.8 of them;
@@ -289,7 +300,19 @@ conv2d ($64^2$)  & 168\,177 & 311\,454 & 1.852
 \end{tabular}
 \end{table*}
 
-Table~\ref{tab:memlat} sweeps both builds over three memory latencies. Speedup
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_speedup.pdf}
+\caption{Left: speedup over the non-coherent baseline against memory latency.
+memcpy begins below the break-even line, where the extension costs more than it
+saves. Right: each build's own cycle count relative to its count at latency
+two. The cached builds barely move; the uncached ones absorb the whole
+increase.}
+\label{fig:speedup}
+\end{figure}
+
+Table~\ref{tab:memlat} and Fig.~\ref{fig:speedup} sweep both builds over three
+memory latencies. Speedup
 is monotonic in latency for every kernel, and the ordering between kernels is
 preserved at all three latencies, which indicates the two terms act
 independently rather than interacting.
