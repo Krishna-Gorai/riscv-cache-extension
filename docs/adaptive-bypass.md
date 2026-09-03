@@ -95,6 +95,59 @@ perform are arbitrations every other PE does not queue behind. Removing roughly
 96 % of read arbitrations from a high-hit-rate PE returns time to its
 neighbours, including neighbours whose own hit rate is poor.
 
+## The design was built, measured, and is wrong
+
+Implemented behind a `SpecHit` parameter, run, and reverted. Both halves of the
+premise turned out to be false, and the RTL found it in an afternoon.
+
+**It does not help.** conv2d, four PEs, coherent:
+
+| | cycles | snoop stall |
+|---|---|---|
+| baseline, MemLat 2 | 168,177 | 20,848 |
+| speculative, MemLat 2 | 168,937 | 21,894 |
+| baseline, MemLat 20 | 202,825 | 86,415 |
+| speculative, MemLat 20 | 203,353 | 87,123 |
+
+Slower at both latencies, with *more* stall, not less.
+
+`snoopy_bus.sv` says why, and it was written down all along:
+
+> Plain READ REQs are not arbitrated against each other -- multiple readers may
+> proceed in the same cycle, which is the "Multiple-Readers" half of the MRSW
+> invariant. A READ REQ is withheld while any other core has an INV REQ
+> outstanding for the same line, which is the "Single-Writer" half.
+
+Reads were never queuing for a grant, so there was no arbitration cost to
+remove. The premise that every read pays an arbitration round was simply untrue
+of this bus.
+
+**And it is not correct.** The screening a READ REQ passes is not about
+allocation. It is the single-writer half of MRSW: it stops a reader observing a
+line while another core is in the middle of writing it. A read that hits a
+resident line while a remote invalidation for that line is outstanding would
+return stale data. The argument in the section above -- that a hit installs
+nothing and so needs no screening -- confuses *what the read does to the cache*
+with *what the bus is protecting*. The bus is protecting the read itself.
+
+The eleven functional checks passed, which is worth recording: the race window
+is narrow and a passing test said nothing about it. The measurement is what
+prompted re-reading the bus, and the bus is what exposed the bug.
+
+## What is actually there to win
+
+The stall the counters report is therefore not queuing overhead that a cleverer
+design could remove. It is genuine coherence conflict -- readers waiting on
+writers, which is the invariant doing its job.
+
+That reframes the opportunity a third time. Conflicts can still be reduced, but
+only by having fewer of them, and the obvious lever is granularity: an
+invalidation covers a whole 16-byte line, so two PEs touching different words of
+one line conflict without sharing anything. Whether that false sharing accounts
+for a meaningful share of the measured stall is a question the counters cannot
+answer yet, and is the next thing to measure rather than the next thing to
+build.
+
 ## Risks
 
 - **The deadlock argument changes.** The existing stage-1 hold slot and
