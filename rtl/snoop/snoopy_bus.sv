@@ -35,7 +35,19 @@ module snoopy_bus
   parameter  int unsigned AddrW     = 32,
   parameter  int unsigned LineBytes = 16,
 
+  // Snoop filter. 0 broadcasts every invalidation, as published. 1 consults an
+  // exact mirror of the DCUs' tag arrays first and sends nothing when no other
+  // cache holds the line. See rtl/snoop/snoop_filter.sv for why a mirror rather
+  // than a hash, and results/invalidation_use.csv for why it is worth having.
+  parameter  bit          SnoopFilter = 1'b0,
+  // Geometry of the caches being mirrored; ignored when SnoopFilter is 0.
+  parameter  int unsigned NumWays   = 2,
+  parameter  int unsigned NumSets   = 64,
+
   localparam int unsigned OffsW = $clog2(LineBytes),
+  localparam int unsigned IdxW  = $clog2(NumSets),
+  localparam int unsigned TagW  = AddrW - IdxW - OffsW,
+  localparam int unsigned WayW  = (NumWays <= 1) ? 1 : $clog2(NumWays),
   localparam int unsigned CoreW = (NumCores <= 1) ? 1 : $clog2(NumCores)
 ) (
   input  logic                      clk_i,
@@ -56,7 +68,14 @@ module snoopy_bus
   // --- invalidation broadcast, one per DCU ----------------------------------
   output logic [NumCores-1:0]       inv_valid_o,
   output logic [NumCores*AddrW-1:0] inv_addr_o,
-  input  logic [NumCores-1:0]       inv_ready_i
+  input  logic [NumCores-1:0]       inv_ready_i,
+
+  // --- snoop-filter mirror updates, one per DCU -----------------------------
+  input  logic [NumCores-1:0]       dir_upd_i,
+  input  logic [NumCores*IdxW-1:0]  dir_set_i,
+  input  logic [NumCores*WayW-1:0]  dir_way_i,
+  input  logic [NumCores*TagW-1:0]  dir_tag_i,
+  input  logic [NumCores-1:0]       dir_inst_i
 );
 
   function automatic logic same_line(input logic [AddrW-1:0] a,
@@ -123,10 +142,57 @@ module snoopy_bus
   assign win_addr  = addr_i[inv_arb_idx*AddrW +: AddrW];
   assign win_is_sc = is_sc[inv_arb_idx];
 
+  // ---------------------------------------------------------------------------
+  //  Snoop filter -- is there anybody to tell?
+  //
+  //  The mirror is exact, so filt_any_other is exact: when it is low, no other
+  //  cache holds the line and a broadcast would clear nothing anywhere. Not
+  //  sending it is therefore unobservable, which is a considerably easier thing
+  //  to argue than the two mechanisms this replaced.
+  //
+  //  Held high when the filter is not built, so bcast_needed keeps its
+  //  published meaning and the two designs differ in one parameter.
+  // ---------------------------------------------------------------------------
+  // Driven from inside a generate branch, so it is declared as a wire with an
+  // explicit default rather than a variable: a variable left undriven in the
+  // branch that is not taken reads as X, and an X here propagates straight into
+  // bcast_needed and quietly changes what the bus does.
+  wire filt_any_other;
+  logic filt_from_mirror;
+
+  if (SnoopFilter) begin : g_filter
+    snoop_filter #(
+      .NumCores (NumCores),
+      .NumWays  (NumWays),
+      .NumSets  (NumSets),
+      .AddrW    (AddrW),
+      .OffsW    (OffsW)
+    ) u_filter (
+      .clk_i       (clk_i),
+      .rst_ni      (rst_ni),
+      .upd_valid_i (dir_upd_i),
+      .upd_set_i   (dir_set_i),
+      .upd_way_i   (dir_way_i),
+      .upd_tag_i   (dir_tag_i),
+      .upd_inst_i  (dir_inst_i),
+      .qry_addr_i  (win_addr),
+      .qry_core_i  (inv_arb_idx),
+      .held_o      (),
+      .any_other_o (filt_from_mirror)
+    );
+  end else begin : g_no_filter
+    assign filt_from_mirror = 1'b1;
+  end
+
+  // One driver, at module scope, so there is no doubt what this is when the
+  // filter is not built.
+  assign filt_any_other = SnoopFilter ? filt_from_mirror : 1'b1;
+
   // A store-conditional that lost its reservation performs no write, so it
   // needs no invalidation broadcast -- it is granted purely to release the
   // requesting DCU's stage 1.
   assign bcast_needed = inv_arb_valid && !(win_is_sc && !sc_excl_ok)
+                        && filt_any_other
 `ifdef ORACLE_NOBCAST
     // -------------------------------------------------------------------------
     //  MEASUREMENT INSTRUMENT. NOT A DESIGN. Never define this for a build.

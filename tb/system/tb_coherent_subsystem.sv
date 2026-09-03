@@ -81,7 +81,20 @@ module tb_coherent_subsystem;
 
   logic [NumCores*32-1:0] p_rd_hit, p_rd_miss, p_wr_hit, p_wr_miss;
 
+  // The four benchmark kernels share nothing, so they never exercise the
+  // filter's must-broadcast path. This testbench does: 37.5 % of its
+  // invalidations are useful. Building it with the filter on is the test that
+  // matters -- a filter that wrongly suppressed a broadcast would lose an
+  // invalidation, and the version-monotonicity checker would see a core observe
+  // an older value than one it had already seen.
+`ifdef SNOOP_FILTER
+  localparam bit UseFilter = 1'b1;
+`else
+  localparam bit UseFilter = 1'b0;
+`endif
+
   coherent_subsystem #(
+    .SnoopFilter (UseFilter),
     .NumCores  (NumCores),
     .NumWays   (NumWays),
     .NumSets   (NumSets),
@@ -371,6 +384,16 @@ module tb_coherent_subsystem;
     $display("--- S3: randomised four-core stress ---------------------------");
     begin
       automatic int unsigned N_OPS = 900;
+
+      // Seed explicitly. Unseeded, xsim derives the stream from the elaborated
+      // design, so adding a port to the DCU changes the stimulus and with it
+      // the check count and the hit rates -- which makes two designs
+      // incomparable for reasons that have nothing to do with either. Anything
+      // measured across a design change has to see identical stimulus.
+      // xsim does not implement $urandom(seed); process::self().srandom is the
+      // portable way, and seeding before the fork gives each spawned process a
+      // deterministic stream derived from it.
+      process::self().srandom(32'h5EED_1234);
       for (int unsigned c = 0; c < NumCores; c++) begin
         fork
           automatic int unsigned cc = c;

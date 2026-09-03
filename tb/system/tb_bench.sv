@@ -27,7 +27,9 @@ module bench_harness #(
   // Cache geometry. The defaults are the paper's 2 KiB 2-way; the sweeps
   // below vary them to separate a capacity miss from a conflict miss.
   parameter int unsigned NumWays  = 2,
-  parameter int unsigned NumSets  = 64
+  parameter int unsigned NumSets  = 64,
+  // Snoop filter; see rtl/snoop/snoop_filter.sv.
+  parameter bit          SnoopFilter = 1'b0
 );
 
   import cache_pkg::*;
@@ -73,6 +75,7 @@ module bench_harness #(
   soc_top #(
     .NumPes     (NumPes),
     .Coherent   (Coherent),
+    .SnoopFilter (SnoopFilter),
     .NumWays    (NumWays),
     .NumSets    (NumSets),
     .LineBytes  (LineBytes),
@@ -366,6 +369,23 @@ endmodule
 //  MemLat=2 -- an on-chip BRAM answering almost immediately -- there is very
 //  little to hide, which is why the streaming kernel does not gain there.
 // -----------------------------------------------------------------------------
+//  With the snoop filter: identical in every other respect, so the difference
+//  between these and the three above is the filter and nothing else.
+module tb_bench_sf;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent filtered]"),
+                  .SnoopFilter(1'b1)) h ();
+endmodule
+
+module tb_bench_sf_l8;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent filtered]"),
+                  .MemLat(8), .SnoopFilter(1'b1)) h ();
+endmodule
+
+module tb_bench_sf_l20;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent filtered]"),
+                  .MemLat(20), .SnoopFilter(1'b1)) h ();
+endmodule
+
 module tb_bench_l8;
   bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent]"),        .MemLat(8)) h ();
 endmodule

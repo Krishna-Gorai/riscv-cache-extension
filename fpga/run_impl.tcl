@@ -95,7 +95,7 @@ foreach f {
   rtl/axi/axi_xbar.sv rtl/axi/axi_sram.sv rtl/axi/axi_ctrl.sv
   rtl/axi/axi_master_simple.sv rtl/axi/axi_master_dcu.sv
   rtl/snoop/rr_arbiter.sv rtl/snoop/invalidation_table.sv
-  rtl/snoop/link_register.sv rtl/snoop/snoopy_bus.sv
+  rtl/snoop/link_register.sv rtl/snoop/snoop_filter.sv rtl/snoop/snoopy_bus.sv
   rtl/soc/coherent_subsystem.sv
   rtl/pe/bridge_router.sv rtl/pe/itcm.sv rtl/pe/instr_bridge.sv
   rtl/pe/data_bridge.sv rtl/pe/pe_top.sv

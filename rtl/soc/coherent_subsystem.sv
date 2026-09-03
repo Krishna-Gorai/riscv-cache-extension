@@ -21,9 +21,17 @@ module coherent_subsystem
   parameter  int unsigned LineBytes    = 16,
   parameter  int unsigned AddrW        = 32,
   parameter  int unsigned DataW        = 32,
+  // Snoop filter; see rtl/snoop/snoop_filter.sv. Threaded rather than hardcoded
+  // so one parameter separates the two designs, as Coherent does elsewhere.
+  parameter  bit          SnoopFilter  = 1'b0,
 
   localparam int unsigned WordBytes    = DataW / 8,
-  localparam int unsigned LineBits     = LineBytes * 8
+  localparam int unsigned LineBits     = LineBytes * 8,
+  // Geometry the snoop-filter mirror is indexed by; must match the DCUs'.
+  localparam int unsigned OffsW        = $clog2(LineBytes),
+  localparam int unsigned IdxW         = $clog2(NumSets),
+  localparam int unsigned TagW         = AddrW - IdxW - OffsW,
+  localparam int unsigned WayW         = (NumWays <= 1) ? 1 : $clog2(NumWays)
 ) (
   input  logic                          clk_i,
   input  logic                          rst_ni,
@@ -78,6 +86,13 @@ module coherent_subsystem
   logic [NumCores-1:0]       inv_valid;
   logic [NumCores*AddrW-1:0] inv_addr;
   logic [NumCores-1:0]       inv_ready;
+
+  // Mirror updates, one set per DCU, packed for the bus.
+  logic [NumCores-1:0]      dir_upd;
+  logic [NumCores*IdxW-1:0] dir_set;
+  logic [NumCores*WayW-1:0] dir_way;
+  logic [NumCores*TagW-1:0] dir_tag;
+  logic [NumCores-1:0]      dir_inst;
 
   for (genvar c = 0; c < NumCores; c++) begin : g_dcu
     amo_e dcu_amo;
@@ -149,14 +164,23 @@ module coherent_subsystem
       .perf_stall_snoop_o (perf_stall_snoop_o[c*32 +: 32]),
       .perf_stall_s2_o (perf_stall_s2_o[c*32 +: 32]),
       .perf_rd_wait_o (perf_rd_wait_o[c*32 +: 32]),
-      .perf_wr_wait_o (perf_wr_wait_o[c*32 +: 32])
+      .perf_wr_wait_o (perf_wr_wait_o[c*32 +: 32]),
+
+      .dir_upd_o         (dir_upd[c]),
+      .dir_set_o         (dir_set[c*IdxW +: IdxW]),
+      .dir_way_o         (dir_way[c*WayW +: WayW]),
+      .dir_tag_o         (dir_tag[c*TagW +: TagW]),
+      .dir_inst_o        (dir_inst[c])
     );
   end
 
   snoopy_bus #(
-    .NumCores  (NumCores),
-    .AddrW     (AddrW),
-    .LineBytes (LineBytes)
+    .NumCores    (NumCores),
+    .AddrW       (AddrW),
+    .LineBytes   (LineBytes),
+    .SnoopFilter (SnoopFilter),
+    .NumWays     (NumWays),
+    .NumSets     (NumSets)
   ) u_snoopy_bus (
     .clk_i       (clk_i),
     .rst_ni      (rst_ni),
@@ -170,7 +194,13 @@ module coherent_subsystem
     .wr_addr_i   (snp_wr_addr),
     .inv_valid_o (inv_valid),
     .inv_addr_o  (inv_addr),
-    .inv_ready_i (inv_ready)
+    .inv_ready_i (inv_ready),
+
+    .dir_upd_i   (dir_upd),
+    .dir_set_i   (dir_set),
+    .dir_way_i   (dir_way),
+    .dir_tag_i   (dir_tag),
+    .dir_inst_i  (dir_inst)
   );
 
 endmodule

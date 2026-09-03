@@ -120,7 +120,23 @@ module dcu
   output logic [31:0]           perf_stall_snoop_o, // stage 1 waiting for the snoopy-bus grant
   output logic [31:0]           perf_stall_s2_o,    // stage 1 waiting for stage 2 to free up
   output logic [31:0]           perf_rd_wait_o,     // stage 2 waiting for the MEM READ RESP
-  output logic [31:0]           perf_wr_wait_o      // stage 2 waiting for the MEM WRITE grant
+  output logic [31:0]           perf_wr_wait_o,     // stage 2 waiting for the MEM WRITE grant
+
+  // ---------------------------------------------------------------------------
+  //  Mirror port for the snoop filter (rtl/snoop/snoop_filter.sv).
+  //
+  //  Exactly the two events that change what this cache holds: a refill
+  //  installs a tag into the victim way, an invalidation clears the hit way.
+  //  These are the same signals that drive valid_q below, taken out to the bus
+  //  so it can answer "does anyone else hold this line" without asking.
+  //
+  //  Tied off and unused when the filter is not instantiated.
+  // ---------------------------------------------------------------------------
+  output logic                  dir_upd_o,      // a way changed this cycle
+  output logic [IdxW-1:0]       dir_set_o,
+  output logic [WayW-1:0]       dir_way_o,
+  output logic [TagW-1:0]       dir_tag_o,
+  output logic                  dir_inst_o      // 1 = installed, 0 = cleared
 );
 
   // ---------------------------------------------------------------------------
@@ -542,6 +558,9 @@ module dcu
       if (s2_valid_q && (s2_req_q == REQ_INV) && hit) begin
         valid_q[s2_idx][hit_way] <= 1'b0;
       end
+      // Anything added here that changes valid_q must also appear in the mirror
+      // port below, or the snoop filter stops being an exact copy and starts
+      // being a guess.
       // refill -- validate the victim way and mark it most recently used
       if (fill_en) begin
         valid_q[s2_idx][victim_way] <= 1'b1;
@@ -601,7 +620,32 @@ module dcu
     end
   end
 
+  // ---------------------------------------------------------------------------
+  //  Mirror port. Driven from the same two conditions that write valid_q above.
+  //
+  //  A refill takes priority in the encoding below because the two cannot both
+  //  fire for the same way in one cycle: an invalidation retires in the cycle it
+  //  is evaluated, and a refill only happens in CCL_RD_WAIT, which an
+  //  invalidation never enters.
+  // ---------------------------------------------------------------------------
+  logic inv_clr;
+  assign inv_clr = s2_valid_q && (s2_req_q == REQ_INV) && hit;
+
+  assign dir_upd_o  = fill_en || inv_clr;
+  assign dir_inst_o = fill_en;
+  assign dir_set_o  = s2_idx;
+  assign dir_way_o  = fill_en ? victim_way : hit_way;
+  assign dir_tag_o  = tag_of(s2_addr_q);
+
 `ifndef SYNTHESIS
+  // A refill and an invalidation must never target the same way in one cycle,
+  // or the mirror and the cache would disagree about what happened.
+  always @(posedge clk_i) begin
+    if (rst_ni && fill_en && inv_clr && (victim_way == hit_way)) begin
+      $error("dcu: refill and invalidation on the same way in one cycle");
+    end
+  end
+
   // ---------------------------------------------------------------------------
   //  Measurement only: was this invalidation broadcast worth sending?
   //

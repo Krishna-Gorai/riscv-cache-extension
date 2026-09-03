@@ -77,6 +77,7 @@ $srcs = @(
   "$root\rtl\snoop\rr_arbiter.sv",
   "$root\rtl\snoop\invalidation_table.sv",
   "$root\rtl\snoop\link_register.sv",
+  "$root\rtl\snoop\snoop_filter.sv",
   "$root\rtl\snoop\snoopy_bus.sv",
   "$root\rtl\soc\coherent_subsystem.sv",
   "$root\rtl\pe\bridge_router.sv",
@@ -104,6 +105,7 @@ $needCore = @("tb_pe", "tb_soc", "tb_soc_nc",
               "tb_bench", "tb_bench_nc",
               "tb_bench_l8", "tb_bench_nc_l8",
               "tb_bench_l20", "tb_bench_nc_l20",
+              "tb_bench_sf", "tb_bench_sf_l8", "tb_bench_sf_l20",
               "tb_bench_w4", "tb_bench_c8k",
               "tb_bench_c16k") -contains $Tb
 $allSrcs  = if ($needCore) { $cvSrcs + $srcs } else { $srcs }

@@ -52,6 +52,8 @@ module soc_top
 
   parameter  int unsigned ItcmBytes  = 32768,
   parameter  int unsigned SimemBytes = 32768,
+  // Snoop filter; see rtl/snoop/snoop_filter.sv. Only meaningful with Coherent.
+  parameter  bit          SnoopFilter = 1'b0,
   // Program image baked into the shared instruction memory, which is where the
   // cores boot from (BootAddr sits in that region). Empty for simulation: the
   // testbenches load it through the backdoor.
@@ -349,8 +351,9 @@ module soc_top
       .NumWays   (NumWays),
       .NumSets   (NumSets),
       .LineBytes (LineBytes),
-      .AddrW     (AddrW),
-      .DataW     (DataW)
+      .AddrW       (AddrW),
+      .DataW       (DataW),
+      .SnoopFilter (SnoopFilter)
     ) u_dcache (
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),
