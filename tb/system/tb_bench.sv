@@ -141,6 +141,37 @@ module bench_harness #(
     return h;
   endfunction
 
+  // Coherence traffic that told nobody anything: broadcasts received across the
+  // cluster against broadcasts that actually cleared a line.
+  //
+  // Bound through a generate loop rather than read directly in the final block:
+  // a hierarchical path into a generate array needs a constant index, and a
+  // procedural loop variable is not one.
+`ifndef SYNTHESIS
+  logic [31:0] inv_rx_w  [NumPes];
+  logic [31:0] inv_use_w [NumPes];
+
+  if (Coherent) begin : g_invuse
+    for (genvar p = 0; p < NumPes; p++) begin : g_pe
+      assign inv_rx_w[p]  = u_soc.g_dcache.u_dcache.g_dcu[p].u_dcu.dbg_inv_rx;
+      assign inv_use_w[p] = u_soc.g_dcache.u_dcache.g_dcu[p].u_dcu.dbg_inv_useful;
+    end
+  end
+
+  final begin
+    automatic longint unsigned rx = 0;
+    automatic longint unsigned useful = 0;
+    if (Coherent) begin
+      for (int unsigned p = 0; p < NumPes; p++) begin
+        rx     += inv_rx_w[p];
+        useful += inv_use_w[p];
+      end
+      $display(" INVUSE %s rx=%0d useful=%0d pct=%0.2f", Label, rx, useful,
+               (rx == 0) ? 0.0 : 100.0 * real'(useful) / real'(rx));
+    end
+  end
+`endif
+
   string hexfile;
 
   initial begin

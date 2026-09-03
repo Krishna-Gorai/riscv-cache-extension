@@ -1,0 +1,6 @@
+workload,broadcasts,useful,useful_pct
+matmul_64,823338,0,0.00
+conv2d_64,139182,0,0.00
+fft_256,61683,0,0.00
+memcpy_16k,24618,0,0.00
+tb_coherent_subsystem (control),921,345,37.46

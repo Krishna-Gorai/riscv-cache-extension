@@ -601,4 +601,33 @@ module dcu
     end
   end
 
+`ifndef SYNTHESIS
+  // ---------------------------------------------------------------------------
+  //  Measurement only: was this invalidation broadcast worth sending?
+  //
+  //  Every core write broadcasts an INV REQ to every other DCU, and the bus
+  //  withholds the grant until all of them can accept it. That handshake is
+  //  paid whether or not any other cache holds the line. In a data-parallel
+  //  kernel where each PE owns its own tile, most written lines are private and
+  //  the broadcast tells nobody anything.
+  //
+  //  This counts, per DCU, how many broadcasts arrived and how many found a
+  //  line to clear. A low ratio across the cluster means most coherence traffic
+  //  is unnecessary, and a filter that suppressed it would return the
+  //  arbitration and handshake time to every core.
+  // ---------------------------------------------------------------------------
+  int unsigned dbg_inv_rx;      // invalidation broadcasts received
+  int unsigned dbg_inv_useful;  // of those, the ones that hit a valid line
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      dbg_inv_rx     <= 0;
+      dbg_inv_useful <= 0;
+    end else if (s2_valid_q && (s2_req_q == REQ_INV) && s2_done) begin
+      dbg_inv_rx <= dbg_inv_rx + 1;
+      if (hit) dbg_inv_useful <= dbg_inv_useful + 1;
+    end
+  end
+`endif
+
 endmodule

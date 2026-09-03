@@ -190,6 +190,84 @@ module snoopy_bus
     end
   end
 
+`ifndef SYNTHESIS
+  // ---------------------------------------------------------------------------
+  //  Measurement only: how much of the read stall is false sharing?
+  //
+  //  Every screening condition above compares whole lines, so a reader is
+  //  blocked by a writer that touches any word of the same 16-byte line --
+  //  including a word it never reads. That is false sharing, and it is
+  //  indistinguishable from true sharing in the cycle counters, which only know
+  //  that a read waited.
+  //
+  //  This recomputes the identical three conditions at word granularity and
+  //  counts the difference. A cycle counted in dbg_rd_false is a cycle a reader
+  //  spent blocked by a writer it did not actually share a word with -- stall
+  //  that a finer invalidation granularity would remove, and stall that the
+  //  present design cannot.
+  //
+  //  Simulation only. It exists to size an opportunity, not to be synthesised,
+  //  and it must not influence read_blocked.
+  // ---------------------------------------------------------------------------
+  function automatic logic same_word(input logic [AddrW-1:0] a,
+                                     input logic [AddrW-1:0] b);
+    return a[AddrW-1:2] == b[AddrW-1:2];
+  endfunction
+
+  logic [NumCores-1:0] read_blocked_word;
+
+  always @(*) begin
+    for (int unsigned r = 0; r < NumCores; r++) begin
+      read_blocked_word[r] = 1'b0;
+      for (int unsigned c = 0; c < NumCores; c++) begin
+        if (c != r && tbl_valid[c] &&
+            same_word(tbl_addr[c*AddrW +: AddrW], addr_i[r*AddrW +: AddrW])) begin
+          read_blocked_word[r] = 1'b1;
+        end
+      end
+      if (inv_gnt_valid && bcast_needed && (int'(inv_arb_idx) != r) &&
+          same_word(win_addr, addr_i[r*AddrW +: AddrW])) begin
+        read_blocked_word[r] = 1'b1;
+      end
+      for (int unsigned c = 0; c < NumCores; c++) begin
+        if (c != r && wr_busy_i[c] &&
+            same_word(wr_addr_i[c*AddrW +: AddrW], addr_i[r*AddrW +: AddrW])) begin
+          read_blocked_word[r] = 1'b1;
+        end
+      end
+    end
+  end
+
+  int unsigned dbg_rd_blocked;   // core-cycles a pending read was blocked
+  int unsigned dbg_rd_false;     // of those, blocked only by line granularity
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      dbg_rd_blocked <= 0;
+      dbg_rd_false   <= 0;
+    end else begin
+      for (int unsigned r = 0; r < NumCores; r++) begin
+        // Only count a core that actually has a read outstanding; a blocked
+        // signal for a core that is not asking costs nobody anything.
+        if (is_read[r] && read_blocked[r]) begin
+          dbg_rd_blocked <= dbg_rd_blocked + 1;
+          if (!read_blocked_word[r]) dbg_rd_false <= dbg_rd_false + 1;
+        end
+      end
+    end
+  end
+
+  final begin
+    if (dbg_rd_blocked != 0) begin
+      $display(" FALSESHARE blocked=%0d false=%0d pct=%0.2f",
+               dbg_rd_blocked, dbg_rd_false,
+               100.0 * real'(dbg_rd_false) / real'(dbg_rd_blocked));
+    end else begin
+      $display(" FALSESHARE blocked=0 false=0 pct=0.00");
+    end
+  end
+`endif
+
   // ---------------------------------------------------------------------------
   //  Arbiter 2 -- atomic LR READ REQs
   // ---------------------------------------------------------------------------

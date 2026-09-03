@@ -275,6 +275,30 @@ module tb_coherent_subsystem;
   bit               ok0, ok1;
   logic [DataW-1:0] dd;
 
+  // Control for the INVUSE counters: this testbench shares deliberately, with a
+  // producer/consumer ping-pong, so it must report a non-zero useful count. If
+  // it does not, the counter is broken and the zeroes the benchmarks report
+  // mean nothing.
+`ifndef SYNTHESIS
+  logic [31:0] inv_rx_w  [NumCores];
+  logic [31:0] inv_use_w [NumCores];
+  for (genvar c = 0; c < NumCores; c++) begin : g_invuse
+    assign inv_rx_w[c]  = dut.g_dcu[c].u_dcu.dbg_inv_rx;
+    assign inv_use_w[c] = dut.g_dcu[c].u_dcu.dbg_inv_useful;
+  end
+
+  final begin
+    automatic longint unsigned rx = 0;
+    automatic longint unsigned useful = 0;
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      rx     += inv_rx_w[c];
+      useful += inv_use_w[c];
+    end
+    $display(" INVUSE tb_coherent_subsystem rx=%0d useful=%0d pct=%0.2f",
+             rx, useful, (rx == 0) ? 0.0 : 100.0 * real'(useful) / real'(rx));
+  end
+`endif
+
   initial begin
     for (int unsigned c = 0; c < NumCores; c++) begin
       t_req[c]   = 1'b0;
