@@ -13,6 +13,7 @@ param(
   [switch]$Wave,
   [string]$Hex       = "",
   [string]$Plusargs  = "",
+  [string]$Defines   = "",   # extra `-d NAME` passed to xvlog, space separated
   [string]$Saif      = "",   # dump switching activity for report_power
   [switch]$Reuse,          # reuse an existing snapshot: only the program image changed
   [string]$OutDir    = "sim\out",  # run directory; a second one lets two sims run at once
@@ -113,7 +114,9 @@ if ($Reuse -and (Test-Path $snapDir)) {
   Write-Host "== reusing snapshot ${Tb}_snap ==" -ForegroundColor DarkCyan
 } else {
 Write-Host "== xvlog ($($allSrcs.Count) files) ==" -ForegroundColor Cyan
-& $xvlog -sv --incr --nolog @allIncs @allSrcs
+$defArgs = @()
+if ($Defines -ne "") { foreach ($d in $Defines.Split(" ")) { if ($d -ne "") { $defArgs += @("-d", $d) } } }
+& $xvlog -sv --incr --nolog @defArgs @allIncs @allSrcs
 if ($LASTEXITCODE -ne 0) { Pop-Location; throw "xvlog failed" }
 
 Write-Host "== xelab $Tb ==" -ForegroundColor Cyan

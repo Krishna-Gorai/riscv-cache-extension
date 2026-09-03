@@ -1,0 +1,5 @@
+kernel,baseline_cycles,oracle_cycles,speedup,baseline_snoop,oracle_snoop,noncoherent_cycles,vs_nc_before,vs_nc_after
+matmul_64,1337850,1094750,1.222,483281,1127,2191981,1.638,2.002
+conv2d_64,168177,154382,1.089,20848,109,311454,1.852,2.017
+fft_256,85093,80228,1.061,6521,2955,113092,1.329,1.410
+memcpy_16k,21010,18708,1.123,7168,1,20493,0.975,1.095

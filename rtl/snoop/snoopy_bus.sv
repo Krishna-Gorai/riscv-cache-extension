@@ -126,7 +126,28 @@ module snoopy_bus
   // A store-conditional that lost its reservation performs no write, so it
   // needs no invalidation broadcast -- it is granted purely to release the
   // requesting DCU's stage 1.
-  assign bcast_needed = inv_arb_valid && !(win_is_sc && !sc_excl_ok);
+  assign bcast_needed = inv_arb_valid && !(win_is_sc && !sc_excl_ok)
+`ifdef ORACLE_NOBCAST
+    // -------------------------------------------------------------------------
+    //  MEASUREMENT INSTRUMENT. NOT A DESIGN. Never define this for a build.
+    //
+    //  An oracle snoop filter: assume no other cache holds the line, so send no
+    //  broadcast and do not wait for the other DCUs to be ready to accept one.
+    //  Arbitration and the write-busy lock are deliberately left alone -- the
+    //  lock still has to stop a remote read fetching a pre-write value from
+    //  memory, whoever is caching what.
+    //
+    //  This is only sound where no invalidation would have been useful, which
+    //  results/invalidation_use.csv says is the case for every kernel here:
+    //  1,048,821 broadcasts, none of which cleared a line. If a benchmark that
+    //  passes without this define fails with it, that assumption was wrong for
+    //  that benchmark, and the failure is the useful result.
+    //
+    //  It bounds what a real snoop filter could return before one is built.
+    // -------------------------------------------------------------------------
+    && 1'b0
+`endif
+    ;
 
   always @(*) begin
     others_ready = 1'b1;
