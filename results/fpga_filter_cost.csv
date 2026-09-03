@@ -1,0 +1,10 @@
+metric,filtered,coherent,delta
+LUT,31204,26762,+4442
+FF,26954,15154,+11800
+BRAM tiles,124,124,+0
+DSP,20,20,+0
+wns_ns,-0.423,1.327,-1.750
+fmax_mhz,72.70,83.29,-10.59
+constraints_met,no,yes,
+cycle_speedup,1.122,1.000,
+net_walltime,0.980,1.000,

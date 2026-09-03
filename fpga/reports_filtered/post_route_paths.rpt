@@ -1,0 +1,120 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version      : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date              : Thu Sep  3 11:10:58 2026
+| Host              : Krishna_NITjsr running 64-bit major release  (build 9200)
+| Command           : report_timing -sort_by group -max_paths 20 -path_type summary -file C:/work/riscv-cache-extension/fpga/reports_filtered/post_route_paths.rpt
+| Design            : fpga_top
+| Device            : xczu7ev-ffvc1156
+| Speed File        : -2  PRODUCTION 1.30 05-15-2022
+| Design State      : Routed
+| Temperature Grade : E
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Startpoint                     Endpoint                       Slack(ns)     
+----------------------------------------------------------------------------
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[26]/CE
+                                                              -0.423        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[7]/CE
+                                                              -0.422        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[29]/CE
+                                                              -0.413        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/illegal_c_insn_id_o_reg/CE
+                                                              -0.411        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[15]/CE
+                                                              -0.404        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[3]/CE
+                                                              -0.404        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[13]/CE
+                                                              -0.400        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[27]/CE
+                                                              -0.398        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[8]/CE
+                                                              -0.398        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[19]/CE
+                                                              -0.394        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[31]/CE
+                                                              -0.394        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[13]/CE
+                                                              -0.384        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[12]/CE
+                                                              -0.382        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[12]/CE
+                                                              -0.381        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[11]/CE
+                                                              -0.380        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[24]/CE
+                                                              -0.379        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[6]/CE
+                                                              -0.379        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[30]/CE
+                                                              -0.378        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[3].u_pe/u_core/core_i/if_stage_i/instr_rdata_id_o_reg[30]/CE
+                                                              -0.378        
+u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_addr_q_reg[6]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/pc_id_o_reg[5]/CE
+                                                              -0.371        
+rst_n_q_reg_rep__31/C          u_soc/g_pe[3].u_axi_dcu/w_addr_q_reg[28]/CLR
+                                                              8.824         
+rst_n_q_reg_rep__31/C          u_soc/g_pe[3].u_axi_dcu/w_addr_q_reg[30]/CLR
+                                                              8.824         
+rst_n_q_reg_rep__28/C          u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s2_addr_q_reg[6]/CLR
+                                                              8.977         
+rst_n_q_reg_rep__28/C          u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s2_addr_q_reg[8]/CLR
+                                                              8.977         
+rst_n_q_reg_rep__31/C          u_soc/g_pe[0].u_axi_dcu/w_addr_q_reg[30]/CLR
+                                                              9.000         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[15]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[16]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[17]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[28]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[29]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/addr_q_reg[30]/CLR
+                                                              9.467         
+rst_n_q_reg_rep__59/C          u_soc/u_xbar/rd_cnt_q_reg[1][1]/CLR
+                                                              9.468         
+rst_n_q_reg_rep__59/C          u_soc/u_xbar/rd_cnt_q_reg[1][2]/CLR
+                                                              9.468         
+rst_n_q_reg_rep__59/C          u_soc/u_xbar/rd_cnt_q_reg[0][1]/CLR
+                                                              9.479         
+rst_n_q_reg_rep__59/C          u_soc/u_xbar/rd_cnt_q_reg[10][1]/CLR
+                                                              9.521         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[3].u_axi_dcu/r_line_q_reg[41]/CLR
+                                                              9.521         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[3].u_axi_dcu/r_line_q_reg[9]/CLR
+                                                              9.521         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/rdata_o_reg[28]/CLR
+                                                              9.552         
+rst_n_q_reg_rep__53/C          u_soc/g_pe[1].u_axi_ifetch/rdata_o_reg[31]/CLR
+                                                              9.552         
+rst_n_q_reg_rep__59/C          u_soc/u_xbar/rd_cnt_q_reg[3][1]/CLR
+                                                              9.600         
+
+
+

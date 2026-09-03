@@ -27,10 +27,14 @@ set program [lindex $argv 2]
 if {$variant eq ""} { set variant "coherent" }
 if {$period  eq ""} { set period  10.0 }
 
+# filtered is coherent plus the snoop filter, so the difference between the two
+# reports is the filter's cost and nothing else.
+set filt 0
 switch -- $variant {
   coherent { set coh 1 }
   baseline { set coh 0 }
-  default  { error "variant must be 'coherent' or 'baseline', got '$variant'" }
+  filtered { set coh 1 ; set filt 1 }
+  default  { error "variant must be coherent, baseline or filtered, got '$variant'" }
 }
 
 # 300 MHz board clock / ClkDiv = SoC clock. BUFGCE_DIV divides by 1..8.
@@ -53,7 +57,7 @@ set outdir [file join $root fpga reports_$variant]
 file mkdir $outdir
 
 puts "=============================================================="
-puts " variant   : $variant  (Coherent=$coh)"
+puts " variant   : $variant  (Coherent=$coh SnoopFilter=$filt)"
 puts " ClkDiv    : $clkdiv   -> [format %.3f $actual_period] ns  ([format %.2f $actual_freq] MHz)"
 puts " program   : $program"
 puts " reports   : $outdir"
@@ -115,6 +119,7 @@ synth_design -top fpga_top -part $part \
   -generic Coherent=$coh \
   -generic ClkDiv=$clkdiv \
   -generic ProgramHex=$program \
+  -generic SnoopFilter=$filt \
   -verilog_define SYNTHESIS
 
 write_checkpoint -force [file join $outdir post_synth.dcp]

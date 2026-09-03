@@ -1,0 +1,7 @@
+variant        filtered (Coherent=1)
+part           xczu7ev-ffvc1156-2-e
+clk_period_ns  13.333
+clk_freq_mhz   75.00
+wns_ns         -0.423
+whs_ns         0.012
+fmax_mhz       72.69
