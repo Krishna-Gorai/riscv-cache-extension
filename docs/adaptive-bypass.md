@@ -1,4 +1,4 @@
-# Reuse-aware bypass: design note
+# Hit-speculative coherence bypass: design note
 
 Target: DATE 2027. Abstract 13 Sep 2026, full paper 20 Sep 2026.
 
@@ -20,104 +20,110 @@ left.
 
 The original design has no way to decline that toll. It is a cache, always.
 
+## The design changed once, on evidence
+
+The first proposal was a streaming mode: no snoop, no allocation, and
+word-granularity reads for phases with no reuse. The measurements killed the
+third part of it and redirected the rest.
+
+The non-coherent baseline already *is* word-granularity streaming with no snoop,
+so it bounds what such a mode could return. Against the coherent build on
+memcpy it takes 20,493 cycles at MemLat 2 but 40,975 at 8 and 90,129 at 20,
+against the cache's 21,010 / 27,151 / 39,439. Word reads win only at the lowest
+latency and lose by better than two to one above it, because the line fill
+amortises one memory latency across four words. A streaming mode built that way
+would be the wrong design nearly everywhere.
+
+Looking for where the time actually goes produced a better answer.
+
 ## What we build
 
-A DCU that switches, per PE and at runtime, between **cached mode** (what
-exists today) and **streaming mode**, and pays the coherence toll only when it
-will earn it.
+`snp_req_o` is asserted for every core read, and stage 1 stalls on `snp_gnt_i`
+until the snoopy bus grants it. It has to: the hit is not known until stage 2,
+so stage 1 arbitrates before it can know whether it needed to. **Every read
+therefore arbitrates for a shared, one-grant-per-cycle resource, including a
+read that will hit in its own cache.** At conv2d's 96.25 % hit rate, 96 % of
+those arbitrations buy nothing.
 
-Streaming mode changes exactly three things, and only for ordinary reads:
+So: **hit-speculative coherence bypass.** A read presumes it will hit and takes
+no bus transaction. Only on a miss does it arbitrate, in stage 2, before going
+to memory.
 
-1. **No snoopy-bus READ REQ.** The read goes straight to memory.
-2. **No allocation.** Nothing is installed in the arrays.
-3. **Word-granularity read** rather than a line fill, so a streaming kernel
-   stops fetching four words to use one.
-
-Everything else is untouched: writes, load-reserved, store-conditional, and the
-handling of invalidations broadcast by other PEs all behave exactly as they do
-now.
+Everything else is untouched: writes still broadcast an invalidation,
+load-reserved still takes the bus to allocate the Link Register,
+store-conditional is unchanged, and remote invalidations are still processed.
 
 ## Why it is correct
 
-This is the part a reviewer will attack, so it is stated as an argument rather
-than asserted.
+This is the part a reviewer will attack, so it is an argument rather than an
+assertion.
 
-The policy is write-through, so **shared memory always holds the current value
-of every location**. Three consequences follow.
+The snoopy-bus READ REQ does two jobs. It screens the address against the
+Invalidation Table, so the DCU does not install a line that another PE is in the
+act of invalidating; and it allocates the Link Register for a load-reserved.
 
-*A streaming-mode read is correct.* It returns memory's value, which is current
-by the paragraph above. The snoopy-bus READ REQ it skips exists to screen the
-address against the Invalidation Table — that is, to stop the DCU caching a line
-that another PE is in the act of invalidating — and to allocate the Link
-Register for a load-reserved. A read that caches nothing needs no screening, and
-a load-reserved is not an ordinary read and is not bypassed.
+**Both jobs concern allocation, not lookup.** A read that hits returns a line
+already resident, and that line is coherent for the reason it always was: remote
+invalidations are still processed, and local writes still update it. Nothing
+about a hit can install a stale copy, because a hit installs nothing.
 
-*Streaming mode cannot create a stale copy.* It installs nothing.
+So the screening is still performed on exactly the accesses that need it — the
+misses, which are the accesses that allocate. It happens one stage later than
+before, which is sound because a miss has not yet done anything observable when
+it arbitrates.
 
-*Retained lines do not go stale while the mode is streaming.* Lines installed
-before the switch are still updated on a local write hit, because writes are
-unchanged, and are still invalidated by remote broadcasts, because snoop
-handling is unchanged.
+Load-reserved is excluded and always takes the bus, because its bus transaction
+exists to allocate the Link Register rather than to screen an address.
 
-Therefore **the mode may change at any access boundary with no flush, no drain
-and no quiescence**. That is what makes the mechanism cheap enough to be worth
-having, and it is a direct consequence of write-through: the same policy that
-makes this class of extension attractive on an FPGA is what makes bypassing it
-safe.
+Writes are untouched. A write must broadcast an invalidation whether or not it
+hits, because another PE may hold the line.
 
 ## What is saved, and what is not
 
-Honestly: writes save nothing. A write must still broadcast an invalidation,
-because another PE may hold the line, and it must still write through. Only
-reads are bypassed, and the paper should say so plainly rather than implying a
-uniform win.
+Reads that hit save one arbitration round on a shared resource. Reads that miss
+save nothing and pay a little: the arbitration they would have done in stage 1
+now happens in stage 2, so a miss is a cycle or so later than before. The design
+is therefore a bet on the hit rate, and the paper must report where the bet
+loses as well as where it wins.
 
-For a streaming kernel the saving per read is one arbitration round, one
-pipeline stage, and three quarters of the memory traffic a line fill would have
-moved.
+Writes save nothing at all, and the paper should say so plainly rather than
+implying a uniform win.
 
-## Predicting reuse
-
-The predictor is deliberately the least novel part of the design, and the paper
-should say so. The contribution is bypass inside a seamless coherent L1 and the
-argument above, not a new predictor.
-
-Per PE: a saturating counter over a window of accesses, tracking read hit rate.
-Below a low-water mark, switch to streaming; above a high-water mark, switch
-back. Hysteresis between the two prevents oscillation.
-
-One wrinkle worth stating: in streaming mode there are no lookups, so there is
-no hit rate to observe, and the predictor would never switch back. The DCU
-therefore **duty-cycles** — every M accesses it spends a short window in cached
-mode to re-measure. The cost of probing is bounded by the duty ratio and the
-benefit is that a phase change is noticed.
+The second-order effect is the more interesting one. The snoopy bus grants one
+request per cycle across the whole cluster, so arbitrations a PE does not
+perform are arbitrations every other PE does not queue behind. Removing roughly
+96 % of read arbitrations from a high-hit-rate PE returns time to its
+neighbours, including neighbours whose own hit rate is poor.
 
 ## Risks
 
-- **Oscillation** around the threshold on a mixed workload. Mitigated by
-  hysteresis; must be measured, not assumed.
-- **Probing cost** on a workload that never wants the cache. Bounded by the
-  duty ratio, but it means streaming mode is never quite as fast as the
-  non-coherent baseline. That is a real limitation and belongs in the paper.
-- **A kernel with spatial but not temporal reuse.** memcpy is sequential, so
-  the line fill helps it even though nothing is re-read. Word-granularity reads
-  give that up. Whether streaming mode actually wins on memcpy is an open
-  question the evaluation has to answer, and it may be that the right streaming
-  read is a line fill without allocation.
-
-That last risk is the one that could invalidate the design, so it is measured
-first.
+- **The deadlock argument changes.** The existing stage-1 hold slot and
+  preemption logic exists so that a DCU stalled on its own grant can still
+  accept an incoming invalidation, which the bus withholds grants behind. Moving
+  read arbitration to stage 2 changes those invariants, and they are the most
+  delicate part of the design. This is the main implementation risk.
+- **A low-hit-rate phase pays and gains nothing**, because every miss now
+  arbitrates a stage later. A reuse predictor could gate the speculation, but
+  that is a second mechanism and only worth adding if measurement says the loss
+  is real.
+- **Load-reserved ordering.** LR still arbitrates in stage 1 while ordinary
+  reads no longer do, so two accesses from the same PE can reach the bus in a
+  different order than they left the core. Whether that is observable needs
+  checking against the Link Register semantics.
 
 ## Plan
 
-| | |
+| day | |
 |---|---|
-| 1-2 | RTL: mode input, streaming read path, predictor |
-| 3-4 | Verification: existing coherence checker must stay green, plus mode-switch stress |
-| 5-6 | Evaluation: re-run both sweeps with the adaptive DCU |
-| 7 | FPGA: area and timing cost of the mechanism |
-| 8-13 | Paper |
-| 14-19 | Buffer, polish, internal review |
+| 1-3 | RTL: move read arbitration to stage 2, preserve the deadlock invariants |
+| 4-5 | Verification: the version-monotonicity checker must stay green, plus a bus-ordering stress case |
+| 6-7 | Evaluation: both sweeps, plus a mixed workload where some PEs stream and others reuse |
+| 8 | FPGA: area and timing cost of the change |
+| 9-14 | Paper |
+| 15-19 | Buffer, polish, internal review |
+
+The mixed workload is the experiment that carries the contention claim, and it
+does not exist yet -- no current kernel runs different code on different PEs.
 
 Abstract registration on 13 Sep needs only a title and abstract, and is worth
 doing whatever happens to the schedule.
