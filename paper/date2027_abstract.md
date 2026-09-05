@@ -9,15 +9,19 @@ Full paper 20 September 2026 AoE (firm).
 
 ## Title
 
-> **Nobody Is Listening: Measuring and Removing Useless Coherence Traffic in a
-> Seamless RISC-V Cache Extension**
+> **An Exact Snoop Filter for Seamless Cache Coherence in FPGA-Based
+> Multi-Core RISC-V**
 
-The hook is the finding, which is unusual enough to earn it: a million
-invalidation broadcasts that invalidated nothing. Two drier alternatives if the
-first reads as too informal for the venue:
+"Exact" is the technical differentiator and is doing real work in the title: the
+filter is a structural mirror of the caches' tag arrays, not a conservative
+hashed approximation, which is what makes the correctness argument trivial and
+what a reviewer will look for first. The title also reads as an architecture
+contribution rather than a measurement study, which matters here because the
+reproduction is the motivation and not the claim.
 
-- *Snoop Filtering for a Seamless Coherent Data Cache in FPGA-Based Multi-Core RISC-V*
-- *When Coherence Traffic Tells Nobody Anything: A Snoop Filter for Soft RISC-V Multicores*
+Considered and set aside: a measurement-first title (*How Much Coherence Traffic
+Is Useless?*) and a colon hook (*Private Data, Cluster-Wide Broadcasts*). Both
+foreground the finding at the cost of foregrounding the mechanism.
 
 ---
 
