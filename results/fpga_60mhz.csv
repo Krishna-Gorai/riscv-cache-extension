@@ -1,0 +1,16 @@
+# 60 MHz, both variants, same flow. Both meet all constraints.
+metric,filtered,reference,delta
+LUT,27776,26767,+1009
+FF,15673,15154,+519
+BRAM tiles,124,124,+0
+DSP,20,20,+0
+wns_ns,4.307,2.597,
+failing_endpoints,0,0,0
+constraints_met,yes,yes,
+# Fmax is NOT reported here on purpose: measured at a met constraint it
+# reflects where the tool stopped optimising, not what the design can do.
+# At 60 MHz it reads 80.91 filtered vs 71.07 reference; at 75 MHz the same
+# two designs read 62.82 and 83.29, the opposite ordering. The frequency
+# cost is established by the 75 MHz builds, where the constraint binds.
+cycle_speedup_geomean,1.122,1.000,
+cycle_speedup_matmul,1.222,1.000,
