@@ -143,7 +143,8 @@ between them is attributable to the cache sub-system alone.
 
 The DCU separates a core access into the places it can wait. One of those is
 stage~1 waiting for a snoopy-bus grant. Table~\ref{tab:stall} gives that bucket
-as a fraction of the cycles a core spent with an access in the DCU at all.
+as a fraction of the cycles a core spent with an access in the DCU at all,
+and Fig.~\ref{fig:stall} plots it.
 
 \begin{table}[t]
 \caption{Time spent waiting for a snoopy-bus grant, as a percentage of cycles
@@ -161,6 +162,15 @@ FFT ($N{=}256$)  &  5.8 &  8.4 & 12.2 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_stall.pdf}
+\caption{Time each core spends waiting for a snoopy-bus grant, as a percentage
+of the cycles it had an access in the DCU. Table~\ref{tab:invuse} shows that
+none of the traffic it is waiting for is necessary.}
+\label{fig:stall}
+\end{figure}
 
 Between a twentieth and a third of a core's time goes to arbitrating for a
 resource that grants one request per cycle across the whole cluster. The share
@@ -277,7 +287,8 @@ and 3{,}202 LUTs, against 512 and 414 for the structure above.
 
 \subsection{Cycles}
 
-Table~\ref{tab:speedup} gives execution time with and without the filter, and
+Table~\ref{tab:speedup} and Fig.~\ref{fig:result} give execution time with and
+without the filter, and
 against an oracle that suppresses every broadcast unconditionally -- which is
 sound to simulate only because Table~\ref{tab:invuse} says none of them are
 needed, and which bounds what any filter could return.
@@ -300,6 +311,19 @@ FFT ($N{=}256$)  &      85{,}093 &      80{,}228 &      80{,}228 & 1.061 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_result.pdf}
+\caption{(a) What the cache extension is worth against having no data cache at
+all, with and without the filter. memcpy begins below parity -- the extension
+costs more than it saves -- and the filter carries it back above. (b) Cycles
+spent waiting on the coherence bus, on a logarithmic scale, which is where the
+speedup in (a) comes from. FFT is the exception: its load-reserved and
+store-conditional traffic still passes the second arbiter, so its stall falls by
+half rather than to nothing.}
+\label{fig:result}
+\end{figure*}
 
 The filter reaches the oracle on every kernel, cycle for cycle. That is what an
 exact structure should do on workloads with no sharing: it suppresses precisely
