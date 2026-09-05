@@ -1,0 +1,462 @@
+%% =============================================================================
+%%  date2027.tex -- An Exact Snoop Filter for Seamless Cache Coherence
+%%
+%%  Build:  pdflatex date2027.tex   (twice)
+%%  Camera ready, with names and the repository URL:
+%%          pdflatex "\def\CAMERAREADY{}\input{date2027}"
+%%
+%%  Defaults to anonymous. DATE's blind-review policy for the research track
+%%  must be confirmed before submission -- the repository URL de-anonymises the
+%%  work instantly, so it is behind the same toggle as the author block.
+%% =============================================================================
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\ifdefined\CAMERAREADY \newif\ifanon \anonfalse \else \newif\ifanon \anontrue \fi
+
+\begin{document}
+
+\title{An Exact Snoop Filter for Seamless Cache Coherence in
+FPGA-Based Multi-Core RISC-V}
+
+\ifanon
+  \author{\IEEEauthorblockN{Anonymous submission}}
+\else
+  \author{\IEEEauthorblockN{Krishna Gorai}
+  \IEEEauthorblockA{Indian Institute of Technology Mandi\\
+  Mandi, Himachal Pradesh, India}
+  \and
+  \IEEEauthorblockN{Bikram Paul}
+  \IEEEauthorblockA{Indian Institute of Technology Mandi\\
+  Mandi, Himachal Pradesh, India}}
+\fi
+
+\maketitle
+
+\begin{abstract}
+Attaching a private, snoop-coherent L1 data cache to an unmodified RISC-V core
+is an attractive way to build FPGA multi-core systems, and a recently proposed
+design does so with coherence handled entirely in hardware. We reproduce that
+design in open-source RTL and measure where its time actually goes. Across four
+benchmark kernels the cluster issues 1{,}048{,}821 invalidation broadcasts and
+not one of them invalidates a line in another cache. Every kernel partitions its
+data per processing element, so every written line is private, yet each write
+still pays a cluster-wide arbitration and a handshake that waits on every other
+cache. That accounts for between 6 and 33\% of a core's execution time, and on a
+streaming kernel it makes the cache extension slower than having no cache at
+all. We add a snoop filter that keeps an exact mirror of the caches' tag arrays
+and suppresses a broadcast when no other cache holds the line. It costs 1{,}009
+LUTs and 519 flip-flops, preserves coherence under a version-monotonicity
+checker, and is worth a geometric mean $1.12\times$, up to $1.22\times$ on
+matrix multiplication. It also converts the streaming kernel from $0.98\times$
+to $1.10\times$ against an uncached baseline. We report the frequency it costs,
+and evaluate at the original design's own 60~MHz operating point.
+\end{abstract}
+
+\begin{IEEEkeywords}
+RISC-V, cache coherence, snoop filter, FPGA, multi-core
+\end{IEEEkeywords}
+
+% =============================================================================
+\section{Introduction}
+% =============================================================================
+
+A soft multi-core system on an FPGA gains a great deal from being able to attach
+a data cache to an existing, verified RISC-V core without modifying it. The core
+stays an unmodified IP block, coherence is handled in hardware, and software
+needs no knowledge of either. Kamaleldin \emph{et al.}~\cite{kamaleldin2024}
+propose exactly this: a private write-through L1 data cache unit (DCU) attached
+through the core's ordinary memory interface, with a snooping invalidation bus
+maintaining coherence across the cluster.
+
+We built that design from scratch in open-source SystemVerilog in order to
+measure it, and the measurement is the origin of this paper. The DCU exports
+per-access cycle accounting, and it says that between 6 and 33\% of a core's
+time is spent waiting on the coherence bus. That is a large number for a
+mechanism that, on these workloads, turns out to accomplish nothing at all:
+across four kernels the cluster sends 1{,}048{,}821 invalidation broadcasts and
+none of them invalidates a line anywhere.
+
+The reason is structural rather than accidental. The kernels are data-parallel
+and partition their arrays per processing element, so almost every written line
+is private to the core writing it. The bus has no way to know that, so every
+write is announced to every cache, and the announcement is serialised: at most
+one invalidation is granted per cycle, and the grant is withheld until every
+other cache is ready to accept the broadcast.
+
+Our contributions are:
+
+\begin{itemize}
+  \item A measurement of how much of this design's coherence traffic is
+        necessary. On its own benchmark kernels, none of it is, and we quantify
+        what that costs (Section~\ref{sec:measure}).
+  \item An exact snoop filter: a structural mirror of the caches' tag arrays
+        that lets the bus suppress a broadcast when no other cache holds the
+        line. Being exact rather than conservative makes the correctness
+        argument a paragraph (Section~\ref{sec:filter}).
+  \item An evaluation in cycles, in coherence correctness, and in
+        place-and-routed FPGA cost, including the frequency the mechanism costs
+        and the operating point at which it pays (Section~\ref{sec:eval}).
+  \item Three mechanisms we designed, measured and rejected before this one,
+        including one that was incorrect while passing every functional test it
+        had (Section~\ref{sec:rejected}).
+\end{itemize}
+
+% =============================================================================
+\section{The Design Under Study}
+% =============================================================================
+
+The DCU is a private, write-through, no-allocate L1 data cache sitting between
+an in-order RISC-V core and the memory system. Because writes go through to
+memory, shared memory always holds the current value and no dirty-line writeback
+or ownership state is needed. Coherence is maintained by an invalidation bus:
+a core write reaches the bus as an invalidation request, and on grant the
+address is broadcast to every other DCU, which drops any matching line.
+
+Two properties of that bus matter here. Plain read requests are not arbitrated
+against each other -- multiple readers proceed in the same cycle, which is the
+multiple-readers half of the MRSW invariant -- but a read is withheld while
+another core has an invalidation outstanding for the same line, which is the
+single-writer half. Invalidations \emph{are} arbitrated: at most one is granted
+per cycle across the cluster, and the grant is held back until every other DCU
+can accept the broadcast, so that no invalidation is ever lost.
+
+Our reproduction targets the stated configuration: four processing elements,
+each an unmodified CV32E40P with a private 2\,KiB two-way DCU of 16-byte lines,
+meeting shared memories through an AXI4 crossbar. A non-coherent baseline is
+built from the same sources with one parameter changed, so any comparison
+between them is attributable to the cache sub-system alone.
+
+% =============================================================================
+\section{Where the Time Goes}
+\label{sec:measure}
+% =============================================================================
+
+\subsection{The coherence bus is a large fraction of runtime}
+
+The DCU separates a core access into the places it can wait. One of those is
+stage~1 waiting for a snoopy-bus grant. Table~\ref{tab:stall} gives that bucket
+as a fraction of the cycles a core spent with an access in the DCU at all.
+
+\begin{table}[t]
+\caption{Time spent waiting for a snoopy-bus grant, as a percentage of cycles
+with an access in the DCU.}
+\label{tab:stall}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Kernel & MemLat 2 & MemLat 8 & MemLat 20 \\
+\midrule
+memcpy (16\,KiB) & 14.3 & 26.1 & \textbf{33.0} \\
+matmul ($64^2$)  & 15.8 & 26.3 & 32.9 \\
+conv2d ($64^2$)  &  6.5 & 11.2 & 19.0 \\
+FFT ($N{=}256$)  &  5.8 &  8.4 & 12.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Between a twentieth and a third of a core's time goes to arbitrating for a
+resource that grants one request per cycle across the whole cluster. The share
+grows with memory latency, because each grant is held longer.
+
+\subsection{It is not readers waiting on writers}
+
+The obvious reading of Table~\ref{tab:stall} is contention between readers and
+writers -- the single-writer screening doing its job. We instrumented the bus to
+count it, and across all four kernels a read is \emph{never} withheld: not once.
+Whatever the stall is, it is not the MRSW screening.
+
+By elimination it is the invalidations, which are the only arbitrated traffic
+left.
+
+\subsection{None of the invalidations are necessary}
+
+Each DCU therefore counts the broadcasts it receives and how many find a line to
+clear. Table~\ref{tab:invuse} gives the result.
+
+\begin{table}[t]
+\caption{Invalidation broadcasts received across the cluster, and how many
+invalidated a line. The last row is a control.}
+\label{tab:invuse}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Workload & Broadcasts & Useful & \% \\
+\midrule
+matmul ($64^2$)      & 823{,}338 & 0 & 0.00 \\
+conv2d ($64^2$)      & 139{,}182 & 0 & 0.00 \\
+FFT ($N{=}256$)      &  61{,}683 & 0 & 0.00 \\
+memcpy (16\,KiB)     &  24{,}618 & 0 & 0.00 \\
+\midrule
+sharing testbench    &       921 & 345 & 37.46 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Over a million broadcasts, none of which invalidated anything. Each one paid a
+cluster-wide arbitration and a four-way handshake to inform nobody of anything.
+
+A result this uniform deserves suspicion of the instrument rather than of the
+design, so the counter is controlled. Our coherence testbench shares
+deliberately, with a producer/consumer ping-pong and a randomised four-core
+stress over a small window; on that workload the same counter reports 345 useful
+broadcasts of 921. The counter can see a useful invalidation. The zeroes are a
+property of the workloads.
+
+They are a property worth stating plainly: these kernels are data-parallel and
+partition their data per core, so essentially every written line is private.
+That is not a weakness of the benchmark selection, because these are the kernels
+the original evaluation itself uses.
+
+% =============================================================================
+\section{An Exact Snoop Filter}
+\label{sec:filter}
+% =============================================================================
+
+\subsection{Structure}
+
+The bus needs to answer one question before granting an invalidation: does any
+other cache hold this line? We answer it exactly, with a mirror of the caches'
+tag and valid arrays held in the bus and updated by the same two events that
+change the caches themselves -- a refill installs a tag into a way, an
+invalidation clears one. Each DCU exports those events on a small port driven
+from the same signals that write its own arrays.
+
+Exactness is therefore structural rather than argued. The mirror is written from
+the same signals, on the same clock edge, under the same conditions as the state
+it mirrors, so it cannot drift from it.
+
+We rejected a hashed filter deliberately. A Bloom-style structure may only ever
+over-approximate: claiming a line is held when it is not costs a redundant
+broadcast and is safe, while the converse loses an invalidation and breaks
+coherence. Insert-only hashed filters are safe but saturate, and matmul touches
+far more lines than an affordable bitmap has bits; removing from one requires
+knowing when a line leaves a cache, which is exactly the information a mirror
+already has.
+
+\subsection{Why suppression is safe}
+
+When the mirror reports that no other cache holds the line, no other cache holds
+it, so a broadcast would clear nothing anywhere and not sending it is
+unobservable. That is the whole argument, and it is short because the structure
+is exact. A conservative filter would need an argument about the direction of
+its error; this one does not.
+
+Everything else is untouched. Invalidations that \emph{are} needed are still
+arbitrated, broadcast and acknowledged exactly as before; the single-writer
+screening on reads is unchanged; and the write-through lock that stops a remote
+read fetching a pre-write value is unchanged, because it protects against a
+value in memory rather than against a cached copy.
+
+\subsection{Implementation}
+
+The mirror is one array per (core, way) pair, each with a single write port and
+a single read port, addressed by set index -- eight arrays at the geometry
+studied here. Tags are held outside any reset, since a tag is only compared when
+its valid bit says it means something, which lets them map to distributed RAM.
+Valid bits stay in flip-flops, where they can be reset and read eight at a time,
+at 512 bits rather than 11{,}264. This is the same division the DCU makes
+internally for the same reason.
+
+That structure matters more than it might appear: a first implementation held
+tags and valid bits together under an asynchronous reset and read them
+combinationally, which Vivado mapped entirely to flip-flops -- 11{,}776 of them,
+and 3{,}202 LUTs, against 512 and 414 for the structure above.
+
+% =============================================================================
+\section{Evaluation}
+\label{sec:eval}
+% =============================================================================
+
+\subsection{Cycles}
+
+Table~\ref{tab:speedup} gives execution time with and without the filter, and
+against an oracle that suppresses every broadcast unconditionally -- which is
+sound to simulate only because Table~\ref{tab:invuse} says none of them are
+needed, and which bounds what any filter could return.
+
+\begin{table}[t]
+\caption{Execution cycles of the slowest processing element. The oracle
+suppresses every broadcast and bounds what a filter can achieve.}
+\label{tab:speedup}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Kernel & Baseline & Filtered & Oracle & Speedup \\
+\midrule
+matmul ($64^2$)  & 1{,}337{,}850 & 1{,}094{,}750 & 1{,}094{,}750 & \textbf{1.222} \\
+memcpy (16\,KiB) &      21{,}010 &      18{,}708 &      18{,}708 & 1.123 \\
+conv2d ($64^2$)  &     168{,}177 &     154{,}382 &     154{,}382 & 1.089 \\
+FFT ($N{=}256$)  &      85{,}093 &      80{,}228 &      80{,}228 & 1.061 \\
+\midrule
+\multicolumn{4}{@{}l}{Geometric mean} & \textbf{1.122} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The filter reaches the oracle on every kernel, cycle for cycle. That is what an
+exact structure should do on workloads with no sharing: it suppresses precisely
+the broadcasts the oracle does, for a provable reason rather than an assumed
+one.
+
+The snoop-stall bucket confirms the mechanism rather than merely the outcome.
+On conv2d it falls from 20{,}848 cycles to 109; on memcpy, from 7{,}168 to 1.
+FFT is the exception and falls only from 6{,}521 to 2{,}955, because
+load-reserved and store-conditional still pass the second arbiter whatever the
+broadcasts do -- a residual cost no filter can remove.
+
+\subsection{The extension stops being harmful}
+
+The reproduction's most awkward finding was that on memcpy at low memory
+latency, the cache extension is \emph{slower} than having no cache at all:
+$0.975\times$ the non-coherent baseline. With the filter it runs at
+$1.095\times$. The pathology is not intrinsic to attaching a coherent cache; it
+is the cost of announcing private writes to a cluster that does not care.
+
+\subsection{Coherence}
+
+The four kernels never exercise the filter's must-broadcast path, so they cannot
+establish that it is safe. Our coherence testbench does: it shares deliberately,
+and roughly half of its invalidations are useful. With the filter enabled it
+passes 3{,}112 checks, including a version-monotonicity invariant -- a core that
+has observed version $k$ of a location may never afterwards observe a version
+below $k$, which is exactly what a lost invalidation causes -- and a final
+quiesce in which every core re-reads the whole window so that any line left
+stale in any cache is caught against memory. The filter suppressed 282 of 921
+broadcasts and delivered every one that mattered.
+
+\subsection{FPGA cost}
+
+Both configurations were implemented on a Zynq UltraScale+ XCZU7EV in a
+non-project Vivado 2025.1 flow. Table~\ref{tab:fpga} gives the cost at 60~MHz,
+where both meet every constraint.
+
+\begin{table}[t]
+\caption{Post-implementation cost of the filter, XCZU7EV at 60\,MHz. Both
+configurations meet all timing constraints.}
+\label{tab:fpga}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & Filtered & Reference & Delta \\
+\midrule
+LUT               & 27{,}776 & 26{,}767 & $+$1{,}009 \\
+Flip-flops        & 15{,}673 & 15{,}154 & $+$519 \\
+Block RAM tiles   &      124 &      124 & 0 \\
+DSP               &       20 &       20 & 0 \\
+WNS setup (ns)    &  $+$4.307 & $+$2.597 & \\
+Failing endpoints &        0 &        0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The filter costs 1{,}009 LUTs and 519 flip-flops, under 4\% of the design, and
+no block RAM or DSP at all.
+
+\subsection{The frequency it costs}
+
+It does cost frequency, and the paper would be misleading without saying so. At
+a 75~MHz target the reference meets timing with $+1.327$~ns of slack and the
+filtered design does not, at $-2.586$~ns. The critical path is 86\% routing and
+runs from a DCU's registered request address across the die; the filter
+lengthens it because the decision to broadcast is a cluster-spanning
+combinational path, and it does so however the mirror is built. Making the
+mirror smaller did not help: the flip-flop version above is four times the area
+and closes \emph{better}, at $-0.423$~ns.
+
+We therefore evaluate at 60~MHz, which both configurations meet comfortably, and
+which is the frequency the original design itself runs at rather than one chosen
+for convenience. At a fixed 60~MHz clock the filter's $1.122\times$ in cycles is
+a $1.122\times$ in wall time. Clocked freely, the reference reaches a higher
+frequency and the advantage narrows.
+
+We deliberately do not report a maximum-frequency comparison from the 60~MHz
+builds. Measured at a constraint that is already met, that figure records where
+the tool stopped optimising rather than what the design can do: at 60~MHz it
+favours the filtered design by 9.8~MHz, and at 75~MHz it favours the reference
+by 20.5~MHz.
+
+% =============================================================================
+\section{What Did Not Work}
+\label{sec:rejected}
+% =============================================================================
+
+Three mechanisms preceded this one. We report them because each was rejected by
+a measurement that also sharpened the eventual design.
+
+\textbf{A streaming mode} that would skip allocation and read at word
+granularity for phases with no reuse. The non-coherent baseline already is such
+a mode, and bounds it: on memcpy it beats the cache at a memory latency of two
+by 2.5\% and loses by better than two to one at eight and twenty, because a line
+fill amortises one memory latency across four words.
+
+\textbf{A hit-speculative bypass}, in which a read presumes it will hit and
+takes no bus transaction, and only a miss arbitrates. It was both useless and
+incorrect. Useless because plain reads were never arbitrated in the first place,
+so there was no cost to remove -- it measured slower. Incorrect because the
+screening it removed is not about allocation but is the single-writer half of
+MRSW: a read that hits a resident line while a remote invalidation for that line
+is outstanding returns stale data. It passed all eleven functional checks of the
+benchmark harness, which is the point worth reporting: the race window is narrow
+and a green test said nothing about it.
+
+\textbf{Two structural fixes to the mirror}, described in
+Section~\ref{sec:eval}: neither the register count nor the storage type was the
+cause of the frequency loss.
+
+% =============================================================================
+\section{Threats to Validity}
+% =============================================================================
+
+The central measurement is that none of the invalidation traffic is useful, and
+that is a property of workloads as much as of the design. Data-parallel kernels
+that partition per core have almost nothing to share. We claim only what we
+measured: on the kernels the original evaluation itself uses, this design's
+coherence traffic is entirely avoidable. A workload with genuine sharing would
+see less benefit, and our own coherence testbench, at roughly half its
+invalidations useful, is the extreme case in the other direction.
+
+The evaluation is in cycles from RTL simulation and in post-place-and-route
+resource and timing figures; no bitstream has been run on hardware. The original
+targets a Virtex UltraScale+ XCVU9P and this work an XCZU7EV, so absolute
+figures are directional rather than a like-for-like comparison.
+
+Power is not reported. Vivado's vectorless estimate models this design as idle
+because it cannot evaluate the cores' clock-gate enables, and a
+switching-activity-based estimate is not yet complete.
+
+% =============================================================================
+\section{Conclusion}
+% =============================================================================
+
+A seamless coherent cache extension for soft RISC-V multicores spends between 6
+and 33\% of each core's time on a coherence protocol that, on its own benchmark
+kernels, accomplishes nothing: over a million invalidation broadcasts, none of
+which invalidate anything. An exact mirror of the caches' tag arrays lets the
+bus suppress those broadcasts for 1{,}009 LUTs and 519 flip-flops, preserving
+coherence structurally rather than by argument, and is worth a geometric mean
+$1.122\times$ at a fixed 60~MHz clock. It also removes the case in which the
+extension was slower than having no cache at all. The mechanism costs
+frequency, and we report where that matters.
+
+\ifanon
+\else
+The design, the measurements and the scripts that regenerate every table are
+available at \url{https://github.com/Krishna-Gorai/riscv-cache-extension}.
+\fi
+
+\begin{thebibliography}{1}
+\bibitem{kamaleldin2024}
+A.~Kamaleldin, M.~Nickel, S.~Wu and D.~G\"ohringer,
+``Seamless Cache Extension for FPGA-based Multi-Core RISC-V SoC,''
+in \emph{Proc. IEEE 37th Int. System-on-Chip Conf. (SOCC)}, 2024.
+\end{thebibliography}
+
+\end{document}
