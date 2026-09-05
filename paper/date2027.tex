@@ -412,6 +412,51 @@ Section~\ref{sec:eval}: neither the register count nor the storage type was the
 cause of the frequency loss.
 
 % =============================================================================
+\section{Related Work}
+% =============================================================================
+
+Filtering snoops is not a new idea, and the value here is not the concept but
+where the filter sits, what it is exact about, and what it is measured against.
+
+JETTY~\cite{jetty} places a small cache-like structure between the bus and each
+processor's L2, filtering snoops that would miss locally so that the energy of a
+tag lookup is not spent. Its target is energy, its position is the receiving
+side, and it is approximate: a small JETTY filters most useless snoops, not all.
+Coarse-grain coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout}
+raise the granularity instead, tracking sharing over regions of hundreds or
+thousands of bytes so that a region known to be unshared needs no broadcast at
+all, trading precision for a much smaller structure.
+
+Our setting inverts the cost that matters. On a snooping bus in a soft
+multi-core, the expense of an unnecessary invalidation is not the energy of the
+remote tag lookups but the \emph{serialisation}: one grant per cycle across the
+cluster, held until every other cache is ready to accept the broadcast. The
+filter therefore belongs at the source, deciding whether to arbitrate at all,
+rather than at each receiver deciding whether to look. And because the design is
+small -- four caches of 128 lines -- an exact mirror costs 1{,}009 LUTs, which
+removes the need to trade precision for size and reduces the correctness
+argument to a sentence. A region-based scheme would be the right choice at a
+scale where an exact mirror is not affordable; at this one it is not necessary.
+
+The RISC-V ecosystem offers coherent fabrics at a range of scales:
+TileLink~\cite{tilelink} as a coherent interconnect standard,
+OpenPiton~\cite{openpiton} scaling directory coherence to many cores, and
+CIFER~\cite{cifer} integrating coherent clusters in silicon. These are complete
+memory systems, and adopting one means adopting its interconnect. The design
+studied here occupies a deliberately different point: an extension attached to
+an unmodified core through its existing memory port, which is what makes it
+attractive on an FPGA and also what confines coherence to a single shared bus.
+Our contribution is to that design point rather than to coherent fabrics
+generally.
+
+Finally, the measurement itself has a precedent worth acknowledging. JETTY's
+premise is the observation that many snoops find no copy elsewhere; we find that
+on the benchmark kernels of the design we study, \emph{no} invalidation finds a
+copy elsewhere. The difference between "many" and "all" is a property of
+data-parallel workloads on a private-cache cluster, and it is what makes an
+exact filter worth its area here.
+
+% =============================================================================
 \section{Threats to Validity}
 % =============================================================================
 
@@ -457,6 +502,41 @@ available at \url{https://github.com/Krishna-Gorai/riscv-cache-extension}.
 A.~Kamaleldin, M.~Nickel, S.~Wu and D.~G\"ohringer,
 ``Seamless Cache Extension for FPGA-based Multi-Core RISC-V SoC,''
 in \emph{Proc. IEEE 37th Int. System-on-Chip Conf. (SOCC)}, 2024.
+
+\bibitem{jetty}
+A.~Moshovos, G.~Memik, B.~Falsafi and A.~Choudhary,
+``JETTY: Filtering Snoops for Reduced Energy Consumption in SMP Servers,''
+in \emph{Proc. 7th Int. Symp. High-Performance Computer Architecture (HPCA)},
+2001.
+
+\bibitem{cgct}
+J.~F.~Cantin, M.~H.~Lipasti and J.~E.~Smith,
+``Improving Multiprocessor Performance with Coarse-Grain Coherence Tracking,''
+in \emph{Proc. 32nd Int. Symp. Computer Architecture (ISCA)}, 2005, pp.
+246--257.
+
+\bibitem{regionscout}
+A.~Moshovos,
+``RegionScout: Exploiting Coarse Grain Sharing in Snoop-Based Coherence,''
+in \emph{Proc. 32nd Int. Symp. Computer Architecture (ISCA)}, 2005, pp.
+234--245.
+
+\bibitem{tilelink}
+W.~Terpstra,
+``TileLink: A Free and Open-Source, High-Performance Scalable Cache-Coherent
+Fabric Designed for RISC-V,'' in \emph{RISC-V Workshop}, 2017.
+
+\bibitem{openpiton}
+J.~Balkind \emph{et al.},
+``OpenPiton+Ariane: The First Open-Source, SMP Linux-booting RISC-V System
+Scaling from One to Many Cores,'' in \emph{Workshop on Computer Architecture
+Research with RISC-V (CARRV)}, 2019.
+
+\bibitem{cifer}
+A.~Li \emph{et al.},
+``CIFER: A Cache-Coherent 12nm 16mm$^2$ SoC with Four 64-Bit RISC-V Application
+Cores, 18 32-Bit RISC-V Compute Cores, and a 1541 LUT6/mm$^2$ Synthesizable
+eFPGA,'' in \emph{IEEE Int. Solid-State Circuits Conf. (ISSCC)}, 2023.
 \end{thebibliography}
 
 \end{document}
