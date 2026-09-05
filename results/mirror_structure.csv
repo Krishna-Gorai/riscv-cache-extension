@@ -1,0 +1,4 @@
+variant,filter_lut,filter_ff,filter_lutram,total_lut_delta,total_ff_delta,wns_ns,fmax_mhz,meets_75
+flip-flop mirror,3202,11776,0,+4442,+11800,-0.423,72.70,no
+LUTRAM mirror,414,512,208,+1006,+519,-2.586,62.82,no
+reference (no filter),0,0,0,0,0,+1.327,83.29,yes
