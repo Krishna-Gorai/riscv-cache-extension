@@ -81,8 +81,14 @@
 % ------------------------------------------------------- interconnect and memory
 \node[box,fill=black!4,minimum width=170mm,minimum height=7mm] (xbar) at (67,-70)
   {AXI4 crossbar --- three masters per PE, three slaves};
-\draw[bi] (-18,-24) -- (-18,-66.5);
-\node[tag,anchor=west] at (-17,-62) {write-through, line fill};
+% The memory path leaves DCU0's left face, passes outside the snoopy bus, and
+% enters the crossbar's left face. Drawn from a real edge rather than from a
+% point near one: at x=-18 it began just clear of the DCU and connected to
+% nothing. Every DCU has its own master, so the label says so and one line
+% stands for four rather than implying the crossbar is reached through the bus.
+\draw[bi] (-16,-20) -- (-26,-20) -- (-26,-70) -- (-18,-70);
+\node[tag,anchor=south,rotate=90] at (-27.5,-46)
+  {write-through and line fill, one AXI master per DCU};
 
 \node[mem,minimum width=52mm] (sd) at (-11,-82) {Shared data memory (coherent)};
 \node[mem,minimum width=52mm] (si) at (67,-82)  {Shared instruction memory (boot)};
