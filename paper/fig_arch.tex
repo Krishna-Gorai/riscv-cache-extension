@@ -1,0 +1,98 @@
+%% =============================================================================
+%%  fig_arch.tex -- system architecture, standalone.
+%%
+%%  Build:  pdflatex fig_arch.tex   ->  fig_arch.pdf
+%%
+%%  TikZ rather than an exported drawing: the type matches the paper's, it is
+%%  vector at any scale, and the figure rebuilds with the document instead of
+%%  depending on an application being installed. paper/architecture.drawio holds
+%%  the same diagram in editable form for slides; this file is what the paper
+%%  includes, and the two have to be kept in step by hand.
+%%
+%%  Placed by absolute coordinates rather than relative chains. The diagram has
+%%  three horizontal buses and several labels competing for the same gaps, and
+%%  relative placement made them collide.
+%%
+%%  Greyscale by construction. The one emphasised block -- the contribution --
+%%  is set apart by border weight as well as fill, so it survives a photocopy.
+%% =============================================================================
+\documentclass[border=2pt]{standalone}
+\usepackage{tikz}
+\usepackage{times}
+\usetikzlibrary{positioning,fit,arrows.meta,calc}
+
+\begin{document}
+\begin{tikzpicture}[
+  x=1mm, y=1mm, font=\footnotesize,
+  box/.style  ={draw,rectangle,align=center,inner sep=1.5pt},
+  core/.style ={box,fill=white,minimum width=32mm,minimum height=7mm},
+  brg/.style  ={box,fill=black!4,minimum width=32mm,minimum height=5mm,
+                font=\scriptsize},
+  dcu/.style  ={box,fill=black!8,minimum width=32mm,minimum height=8mm,
+                font=\scriptsize},
+  grp/.style  ={draw,rectangle,inner sep=2mm},
+  unit/.style ={box,fill=white,font=\scriptsize,minimum height=9mm},
+  new/.style  ={box,fill=black!18,line width=1.1pt,font=\scriptsize,
+                minimum height=10mm},
+  mem/.style  ={box,fill=black!8,minimum height=8mm,font=\scriptsize},
+  bi/.style   ={draw,{Latex[length=1.5mm]}-{Latex[length=1.5mm]},line width=0.5pt},
+  ln/.style   ={draw,-{Latex[length=1.5mm]},line width=0.5pt},
+  mir/.style  ={draw,dashed,dash pattern=on 2pt off 1.5pt,line width=0.7pt},
+  tag/.style  ={font=\scriptsize,inner sep=1pt,fill=white},
+]
+
+% ------------------------------------------------------------ PEs and their DCUs
+\foreach \i/\x in {0/0, 1/43, 2/86, 3/129} {
+  \node[core] (c\i) at (\x, 0)  {CV32E40P \emph{(unmodified)}};
+  \node[brg]  (b\i) at (\x, -6) {I-Bridge $\cdot$ D-Bridge $\cdot$ ITCM};
+  \node[grp,fit=(c\i)(b\i),
+        label={[font=\scriptsize,inner sep=1pt]above:Processing element \i}] {};
+  \node[dcu]  (d\i) at (\x, -20) {DCU, 2\,KiB 2-way\\Tag/Status-RAM, HCL, CCL};
+  \draw[bi] (\x,-9.5) -- node[tag,pos=0.5] {D-port} (\x,-16);
+}
+
+% ------------------------------------------- the coherence bus, and its filter
+\node[unit,minimum width=26mm] (arb1) at (8,-43)  {INV REQ arbiter\\(round robin)};
+\node[unit,minimum width=26mm] (arb2) at (38,-43) {LR REQ arbiter\\(round robin)};
+\node[unit,minimum width=24mm] (itbl) at (68,-43) {Invalidation\\Table};
+\node[unit,minimum width=24mm] (lreg) at (98,-43) {Link\\Register};
+\node[new,minimum width=76mm]  (filt) at (40,-57)
+  {\textbf{Snoop filter --- exact tag mirror}\\
+   tags in LUTRAM, valid bits in flip-flops};
+\node[draw,rectangle,inner sep=0,fit=(arb1)(lreg)(filt),
+      label={[font=\scriptsize,inner sep=2pt]above right:Snoopy bus}] (bus) {};
+
+% the filter's one answer, back to the arbiter that needed it
+\draw[ln] (8,-51.8) -- node[tag,anchor=west,xshift=2mm]
+  {suppress when no other cache holds the line} (8,-47.7);
+
+% requests and broadcasts, DCU to bus
+\foreach \x in {0, 43, 86, 129} { \draw[bi] (\x,-24) -- (\x,-37.6); }
+\node[tag,anchor=west] at (2,-30) {REQ / GNT / INV broadcast};
+
+% ------------------------------ mirror updates: the connectivity this work adds
+\draw[mir] (-18,-33) -- (152,-33);
+\foreach \x in {0, 43, 86, 129} { \draw[mir] (\x,-24) -- (\x,-33); }
+\draw[mir] (152,-33) -- (152,-57) -- (78.5,-57);
+\draw[mir,-{Latex[length=1.5mm]}] (80,-57) -- (78.2,-57);
+\node[font=\scriptsize\itshape,anchor=west,fill=white,inner sep=1pt]
+  at (-17,-33) {tag\,+\,valid updates, one port per DCU};
+
+% ------------------------------------------------------- interconnect and memory
+\node[box,fill=black!4,minimum width=170mm,minimum height=7mm] (xbar) at (67,-70)
+  {AXI4 crossbar --- three masters per PE, three slaves};
+\draw[bi] (-18,-24) -- (-18,-66.5);
+\node[tag,anchor=west] at (-17,-62) {write-through, line fill};
+
+\node[mem,minimum width=52mm] (sd) at (-11,-82) {Shared data memory (coherent)};
+\node[mem,minimum width=52mm] (si) at (67,-82)  {Shared instruction memory (boot)};
+\node[mem,minimum width=52mm] (ct) at (145,-82) {Control region (exit, console)};
+\foreach \x in {-11, 67, 145} { \draw[bi] (\x,-73.5) -- (\x,-78); }
+
+% ---------------------------------------------------------------------- legend
+\node[new,minimum width=5mm,minimum height=3mm,inner sep=0] at (-15,-91) {};
+\node[font=\scriptsize,anchor=west] at (-11,-91)
+  {this work: added logic, and the mirror-update paths it needs (dashed)};
+
+\end{tikzpicture}
+\end{document}

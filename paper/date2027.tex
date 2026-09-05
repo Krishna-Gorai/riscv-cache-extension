@@ -113,6 +113,18 @@ Our contributions are:
 \section{The Design Under Study}
 % =============================================================================
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_arch.pdf}
+\caption{The system, and what this work adds to it. Four unmodified cores sit
+over their private data cache units, which reach shared memory through an AXI4
+crossbar and maintain coherence through a single snoopy bus. The snoop filter
+holds a mirror of every cache's tag and valid arrays, kept current by one update
+port per DCU, and answers the invalidation arbiter's one question: is there
+anybody to tell?}
+\label{fig:arch}
+\end{figure*}
+
 The DCU is a private, write-through, no-allocate L1 data cache sitting between
 an in-order RISC-V core and the memory system. Because writes go through to
 memory, shared memory always holds the current value and no dirty-line writeback
@@ -128,6 +140,7 @@ single-writer half. Invalidations \emph{are} arbitrated: at most one is granted
 per cycle across the cluster, and the grant is held back until every other DCU
 can accept the broadcast, so that no invalidation is ever lost.
 
+Fig.~\ref{fig:arch} shows the system and where the filter sits in it.
 Our reproduction targets the stated configuration: four processing elements,
 each an unmodified CV32E40P with a private 2\,KiB two-way DCU of 16-byte lines,
 meeting shared memories through an AXI4 crossbar. A non-coherent baseline is
