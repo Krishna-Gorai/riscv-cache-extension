@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date         : Sat Sep  5 10:19:03 2026
+| Date         : Tue Sep  8 13:41:58 2026
 | Host         : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command      : report_utilization -file C:/work/riscv-cache-extension/fpga/reports_coherent/post_synth_util.rpt
 | Design       : fpga_top
@@ -32,8 +32,8 @@ Table of Contents
 +-------------------------+-------+-------+------------+-----------+-------+
 |        Site Type        |  Used | Fixed | Prohibited | Available | Util% |
 +-------------------------+-------+-------+------------+-----------+-------+
-| CLB LUTs*               | 27035 |     0 |          0 |    230400 | 11.73 |
-|   LUT as Logic          | 27035 |     0 |          0 |    230400 | 11.73 |
+| CLB LUTs*               | 27059 |     0 |          0 |    230400 | 11.74 |
+|   LUT as Logic          | 27059 |     0 |          0 |    230400 | 11.74 |
 |   LUT as Memory         |     0 |     0 |          0 |    101760 |  0.00 |
 | CLB Registers           | 15158 |     0 |          0 |    460800 |  3.29 |
 |   Register as Flip Flop | 15158 |     0 |          0 |    460800 |  3.29 |
@@ -185,12 +185,12 @@ Warning! For any ECO changes, please run place_design if there are unplaced inst
 +------------+-------+---------------------+
 |  Ref Name  |  Used | Functional Category |
 +------------+-------+---------------------+
-| LUT6       | 15540 |                 CLB |
+| LUT6       | 15528 |                 CLB |
 | FDCE       | 13558 |            Register |
-| LUT3       |  7106 |                 CLB |
-| LUT5       |  4169 |                 CLB |
-| LUT4       |  3622 |                 CLB |
-| LUT2       |  2088 |                 CLB |
+| LUT3       |  7233 |                 CLB |
+| LUT5       |  4191 |                 CLB |
+| LUT4       |  3636 |                 CLB |
+| LUT2       |  1969 |                 CLB |
 | FDRE       |  1547 |            Register |
 | MUXF7      |  1420 |                 CLB |
 | CARRY8     |   548 |                 CLB |

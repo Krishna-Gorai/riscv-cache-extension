@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date              : Sat Sep  5 10:20:07 2026
+| Date              : Tue Sep  8 13:42:51 2026
 | Host              : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -file C:/work/riscv-cache-extension/fpga/reports_coherent/post_synth_timing.rpt
 | Design            : fpga_top
@@ -139,7 +139,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-      8.487        0.000                      0                46954       -2.581   -36969.293                  24396                46954        2.262        0.000                       0                 15419  
+      8.487        0.000                      0                46954       -2.581   -36969.227                  24396                46954        2.262        0.000                       0                 15419  
 
 
 Timing constraints are not met.
@@ -164,7 +164,7 @@ clk300  {0.000 1.666}        3.333           300.030
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
 clk300                                                                                                                                                          2.262        0.000                       0                     1  
-  clk               8.487        0.000                      0                33343       -2.581   -17154.732                  16000                33343        6.124        0.000                       0                 15418  
+  clk               8.487        0.000                      0                33343       -2.581   -17154.670                  16000                33343        6.124        0.000                       0                 15418  
 
 
 ------------------------------------------------------------------------------------------------
@@ -219,7 +219,7 @@ From Clock:  clk
   To Clock:  clk
 
 Setup :            0  Failing Endpoints,  Worst Slack        8.487ns,  Total Violation        0.000ns
-Hold  :        16000  Failing Endpoints,  Worst Slack       -2.581ns,  Total Violation   -17154.733ns
+Hold  :        16000  Failing Endpoints,  Worst Slack       -2.581ns,  Total Violation   -17154.669ns
 PW    :            0  Failing Endpoints,  Worst Slack        6.124ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 

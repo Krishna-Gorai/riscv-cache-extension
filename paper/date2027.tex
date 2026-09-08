@@ -54,8 +54,8 @@ streaming kernel it makes the cache extension slower than having no cache at
 all. We add a snoop filter that keeps an exact mirror of the caches' tag arrays
 and suppresses a broadcast when no other cache holds the line or is fetching it
 -- a distinction that is not cosmetic, since a mirror of committed tags alone
-loses invalidations. It costs 1{,}009
-LUTs and 519 flip-flops, preserves coherence under a version-monotonicity
+loses invalidations. It costs 1{,}064
+LUTs and 516 flip-flops, preserves coherence under a version-monotonicity
 checker, and is worth a geometric mean $1.12\times$, up to $1.22\times$ on
 matrix multiplication. It also converts the streaming kernel from $0.98\times$
 to $1.10\times$ against an uncached baseline. We report the frequency it costs,
@@ -321,7 +321,7 @@ internally for the same reason.
 That structure matters more than it might appear: a first implementation held
 tags and valid bits together under an asynchronous reset and read them
 combinationally, which Vivado mapped entirely to flip-flops -- 11{,}776 of them,
-and 3{,}202 LUTs, against 512 and 414 for the structure above.
+and 3{,}202 LUTs, against 512 and 408 for the structure above.
 
 % =============================================================================
 \section{Evaluation}
@@ -406,12 +406,21 @@ non-project Vivado 2025.1 flow.
 
 \input{tab_hier}
 
-Table~\ref{tab:fpga} gives the breakdown. The filter costs 1{,}009 LUTs and
-519 flip-flops over the unfiltered design, under 4\% of it, and no block RAM or
-DSP at all. Both configurations meet every constraint, at $+4.307$~ns and
-$+2.597$~ns of slack with no failing endpoints.
+Table~\ref{tab:fpga} gives the breakdown. The filter costs 1{,}064 LUTs and
+516 flip-flops over the unfiltered design, under 4\% of it, and no block RAM or
+DSP at all. Both configurations meet every constraint with no failing endpoints,
+at $+1.199$~ns and $+1.265$~ns of slack respectively -- so at this operating
+point the filter costs essentially no slack, 66~ps on a 16.667~ns period.
 
-Two things in the breakdown are worth drawing out. Half of the filter's 414
+Both figures come from one source tree with one parameter changed, implemented
+in the same batch, which is the only way a slack comparison on this design means
+anything: an earlier pair of runs weeks apart put the same two configurations at
+$+4.307$ and $+2.597$~ns, a 1.7~ns spread in the opposite direction, from
+netlists differing by fourteen LUTs. Place-and-route outcomes move by more than
+the effect being measured, so we quote slack only within a batch and never
+across one.
+
+Two things in the breakdown are worth drawing out. Half of the filter's 408
 LUTs are distributed RAM holding the mirror, and its 512 flip-flops are exactly
 the valid bits, four cores by 64 sets by two ways: the structure went in as
 intended, with tags in memory and only the resettable state in registers. And
@@ -510,7 +519,7 @@ remote tag lookups but the \emph{serialisation}: one grant per cycle across the
 cluster, held until every other cache is ready to accept the broadcast. The
 filter therefore belongs at the source, deciding whether to arbitrate at all,
 rather than at each receiver deciding whether to look. And because the design is
-small -- four caches of 128 lines -- an exact mirror costs 1{,}009 LUTs, which
+small -- four caches of 128 lines -- an exact mirror costs 1{,}064 LUTs, which
 removes the need to trade precision for size and reduces the correctness
 argument to a sentence. A region-based scheme would be the right choice at a
 scale where an exact mirror is not affordable; at this one it is not necessary.
@@ -565,7 +574,7 @@ A seamless coherent cache extension for soft RISC-V multicores spends between 6
 and 33\% of each core's time on a coherence protocol that, on its own benchmark
 kernels, accomplishes nothing: over a million invalidation broadcasts, none of
 which invalidate anything. An exact mirror of the caches' tag arrays lets the
-bus suppress those broadcasts for 1{,}009 LUTs and 519 flip-flops, preserving
+bus suppress those broadcasts for 1{,}064 LUTs and 516 flip-flops, preserving
 coherence structurally rather than by argument, and is worth a geometric mean
 $1.122\times$ at a fixed 60~MHz clock. It also removes the case in which the
 extension was slower than having no cache at all. The mechanism costs

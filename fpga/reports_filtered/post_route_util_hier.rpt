@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date         : Sat Sep  5 11:21:38 2026
+| Date         : Tue Sep  8 13:29:41 2026
 | Host         : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command      : report_utilization -hierarchical -hierarchical_depth 5 -file C:/work/riscv-cache-extension/fpga/reports_filtered/post_route_util_hier.rpt
 | Design       : fpga_top
@@ -22,65 +22,65 @@ Table of Contents
 +-----------------------------+----------------------------------+------------+------------+---------+------+-------+--------+--------+------+------------+
 |           Instance          |              Module              | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | URAM | DSP Blocks |
 +-----------------------------+----------------------------------+------------+------------+---------+------+-------+--------+--------+------+------------+
-| fpga_top                    |                            (top) |      27776 |      27568 |     208 |    0 | 15673 |    120 |      8 |    0 |         20 |
+| fpga_top                    |                            (top) |      27845 |      27637 |     208 |    0 | 15670 |    120 |      8 |    0 |         20 |
 |   (fpga_top)                |                            (top) |         19 |         19 |       0 |    0 |   320 |      0 |      0 |    0 |          0 |
-|   u_soc                     |                          soc_top |      27757 |      27549 |     208 |    0 | 15353 |    120 |      8 |    0 |         20 |
-|     g_dcache.u_dcache       |               coherent_subsystem |       6470 |       6262 |     208 |    0 |  4627 |     16 |      8 |    0 |          0 |
-|       g_dcu[0].u_dcu        |                              dcu |       1353 |       1353 |       0 |    0 |   999 |      4 |      2 |    0 |          0 |
-|         (g_dcu[0].u_dcu)    |                              dcu |        613 |        613 |       0 |    0 |   711 |      0 |      0 |    0 |          0 |
-|         u_data_ram          |     cache_ram__parameterized0_92 |        322 |        322 |       0 |    0 |   264 |      4 |      0 |    0 |          0 |
-|         u_tag_ram           |                     cache_ram_93 |        420 |        420 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
-|       g_dcu[1].u_dcu        |                           dcu_85 |       1702 |       1702 |       0 |    0 |   999 |      4 |      2 |    0 |          0 |
-|         (g_dcu[1].u_dcu)    |                           dcu_85 |        964 |        964 |       0 |    0 |   711 |      0 |      0 |    0 |          0 |
+|   u_soc                     |                          soc_top |      27826 |      27618 |     208 |    0 | 15350 |    120 |      8 |    0 |         20 |
+|     g_dcache.u_dcache       |               coherent_subsystem |       6540 |       6332 |     208 |    0 |  4628 |     16 |      8 |    0 |          0 |
+|       g_dcu[0].u_dcu        |                              dcu |       1356 |       1356 |       0 |    0 |  1000 |      4 |      2 |    0 |          0 |
+|         (g_dcu[0].u_dcu)    |                              dcu |        614 |        614 |       0 |    0 |   712 |      0 |      0 |    0 |          0 |
+|         u_data_ram          |     cache_ram__parameterized0_92 |        326 |        326 |       0 |    0 |   264 |      4 |      0 |    0 |          0 |
+|         u_tag_ram           |                     cache_ram_93 |        419 |        419 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
+|       g_dcu[1].u_dcu        |                           dcu_85 |       1724 |       1724 |       0 |    0 |   999 |      4 |      2 |    0 |          0 |
+|         (g_dcu[1].u_dcu)    |                           dcu_85 |        987 |        987 |       0 |    0 |   711 |      0 |      0 |    0 |          0 |
 |         u_data_ram          |     cache_ram__parameterized0_90 |        321 |        321 |       0 |    0 |   264 |      4 |      0 |    0 |          0 |
-|         u_tag_ram           |                     cache_ram_91 |        419 |        419 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
-|       g_dcu[2].u_dcu        |                           dcu_86 |       1349 |       1349 |       0 |    0 |  1000 |      4 |      2 |    0 |          0 |
-|         (g_dcu[2].u_dcu)    |                           dcu_86 |        611 |        611 |       0 |    0 |   712 |      0 |      0 |    0 |          0 |
+|         u_tag_ram           |                     cache_ram_91 |        420 |        420 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
+|       g_dcu[2].u_dcu        |                           dcu_86 |       1371 |       1371 |       0 |    0 |  1000 |      4 |      2 |    0 |          0 |
+|         (g_dcu[2].u_dcu)    |                           dcu_86 |        632 |        632 |       0 |    0 |   712 |      0 |      0 |    0 |          0 |
 |         u_data_ram          |     cache_ram__parameterized0_88 |        321 |        321 |       0 |    0 |   264 |      4 |      0 |    0 |          0 |
 |         u_tag_ram           |                     cache_ram_89 |        419 |        419 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
-|       g_dcu[3].u_dcu        |                           dcu_87 |       1351 |       1351 |       0 |    0 |   999 |      4 |      2 |    0 |          0 |
-|         (g_dcu[3].u_dcu)    |                           dcu_87 |        614 |        614 |       0 |    0 |   711 |      0 |      0 |    0 |          0 |
+|       g_dcu[3].u_dcu        |                           dcu_87 |       1365 |       1365 |       0 |    0 |   999 |      4 |      2 |    0 |          0 |
+|         (g_dcu[3].u_dcu)    |                           dcu_87 |        627 |        627 |       0 |    0 |   711 |      0 |      0 |    0 |          0 |
 |         u_data_ram          |        cache_ram__parameterized0 |        321 |        321 |       0 |    0 |   264 |      4 |      0 |    0 |          0 |
 |         u_tag_ram           |                        cache_ram |        419 |        419 |       0 |    0 |    24 |      0 |      2 |    0 |          0 |
-|       u_snoopy_bus          |                       snoopy_bus |        715 |        507 |     208 |    0 |   630 |      0 |      0 |    0 |          0 |
-|         g_filter.u_filter   |                     snoop_filter |        414 |        206 |     208 |    0 |   512 |      0 |      0 |    0 |          0 |
-|         u_inv_arb           |                       rr_arbiter |        185 |        185 |       0 |    0 |     2 |      0 |      0 |    0 |          0 |
-|         u_inv_table         |               invalidation_table |        116 |        116 |       0 |    0 |   116 |      0 |      0 |    0 |          0 |
+|       u_snoopy_bus          |                       snoopy_bus |        728 |        520 |     208 |    0 |   630 |      0 |      0 |    0 |          0 |
+|         g_filter.u_filter   |                     snoop_filter |        408 |        200 |     208 |    0 |   512 |      0 |      0 |    0 |          0 |
+|         u_inv_arb           |                       rr_arbiter |        251 |        251 |       0 |    0 |     2 |      0 |      0 |    0 |          0 |
+|         u_inv_table         |               invalidation_table |         69 |         69 |       0 |    0 |   116 |      0 |      0 |    0 |          0 |
 |     g_pe[0].u_axi_dcu       |                   axi_master_dcu |         53 |         53 |       0 |    0 |   215 |      0 |      0 |    0 |          0 |
 |     g_pe[0].u_axi_ext       |                axi_master_simple |         13 |         13 |       0 |    0 |    97 |      0 |      0 |    0 |          0 |
 |     g_pe[0].u_axi_ifetch    |              axi_master_simple_0 |         12 |         12 |       0 |    0 |    57 |      0 |      0 |    0 |          0 |
 |     g_pe[0].u_pe            |                           pe_top |       4375 |       4375 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
 |       u_core                |                  cv32e40p_top_60 |       4232 |       4232 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |         (u_core)            |                  cv32e40p_top_60 |        260 |        260 |       0 |    0 |     0 |      0 |      0 |    0 |          0 |
-|         core_i              |                 cv32e40p_core_66 |       3986 |       3986 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|         core_i              |                 cv32e40p_core_66 |       3985 |       3985 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |           cs_registers_i    |         cv32e40p_cs_registers_67 |         92 |         92 |       0 |    0 |   461 |      0 |      0 |    0 |          0 |
 |           ex_stage_i        |             cv32e40p_ex_stage_68 |        299 |        299 |       0 |    0 |   118 |      0 |      0 |    0 |          5 |
-|           id_stage_i        |             cv32e40p_id_stage_69 |       2889 |       2889 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
-|           if_stage_i        |             cv32e40p_if_stage_70 |        662 |        662 |       0 |    0 |   242 |      0 |      0 |    0 |          0 |
+|           id_stage_i        |             cv32e40p_id_stage_69 |       2886 |       2886 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
+|           if_stage_i        |             cv32e40p_if_stage_70 |        663 |        663 |       0 |    0 |   242 |      0 |      0 |    0 |          0 |
 |           load_store_unit_i |      cv32e40p_load_store_unit_71 |         74 |         74 |       0 |    0 |    40 |      0 |      0 |    0 |          0 |
 |       u_data_bridge         |                   data_bridge_61 |         72 |         72 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |         u_router            | bridge_router__parameterized0_65 |         72 |         72 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |     g_pe[1].u_axi_dcu       |                 axi_master_dcu_1 |         58 |         58 |       0 |    0 |   215 |      0 |      0 |    0 |          0 |
 |     g_pe[1].u_axi_ext       |              axi_master_simple_2 |         16 |         16 |       0 |    0 |    97 |      0 |      0 |    0 |          0 |
 |     g_pe[1].u_axi_ifetch    |              axi_master_simple_3 |         15 |         15 |       0 |    0 |    57 |      0 |      0 |    0 |          0 |
-|     g_pe[1].u_pe            |           pe_top__parameterized0 |       4375 |       4375 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
-|       u_core                |                  cv32e40p_top_35 |       4232 |       4232 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|     g_pe[1].u_pe            |           pe_top__parameterized0 |       4374 |       4374 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
+|       u_core                |                  cv32e40p_top_35 |       4231 |       4231 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |         (u_core)            |                  cv32e40p_top_35 |        260 |        260 |       0 |    0 |     0 |      0 |      0 |    0 |          0 |
-|         core_i              |                 cv32e40p_core_41 |       3984 |       3984 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|         core_i              |                 cv32e40p_core_41 |       3983 |       3983 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |           cs_registers_i    |         cv32e40p_cs_registers_42 |         92 |         92 |       0 |    0 |   461 |      0 |      0 |    0 |          0 |
-|           ex_stage_i        |             cv32e40p_ex_stage_43 |        299 |        299 |       0 |    0 |   118 |      0 |      0 |    0 |          5 |
-|           id_stage_i        |             cv32e40p_id_stage_44 |       2889 |       2889 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
-|           if_stage_i        |             cv32e40p_if_stage_45 |        661 |        661 |       0 |    0 |   242 |      0 |      0 |    0 |          0 |
+|           ex_stage_i        |             cv32e40p_ex_stage_43 |        300 |        300 |       0 |    0 |   118 |      0 |      0 |    0 |          5 |
+|           id_stage_i        |             cv32e40p_id_stage_44 |       2888 |       2888 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
+|           if_stage_i        |             cv32e40p_if_stage_45 |        663 |        663 |       0 |    0 |   242 |      0 |      0 |    0 |          0 |
 |           load_store_unit_i |      cv32e40p_load_store_unit_46 |         74 |         74 |       0 |    0 |    40 |      0 |      0 |    0 |          0 |
 |       u_data_bridge         |                   data_bridge_36 |         72 |         72 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |         u_router            | bridge_router__parameterized0_40 |         72 |         72 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |     g_pe[2].u_axi_dcu       |                 axi_master_dcu_4 |         54 |         54 |       0 |    0 |   215 |      0 |      0 |    0 |          0 |
 |     g_pe[2].u_axi_ext       |              axi_master_simple_5 |         13 |         13 |       0 |    0 |    97 |      0 |      0 |    0 |          0 |
 |     g_pe[2].u_axi_ifetch    |              axi_master_simple_6 |         11 |         11 |       0 |    0 |    57 |      0 |      0 |    0 |          0 |
-|     g_pe[2].u_pe            |           pe_top__parameterized1 |       4373 |       4373 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
-|       u_core                |                  cv32e40p_top_10 |       4230 |       4230 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|     g_pe[2].u_pe            |           pe_top__parameterized1 |       4376 |       4376 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
+|       u_core                |                  cv32e40p_top_10 |       4233 |       4233 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |         (u_core)            |                  cv32e40p_top_10 |        260 |        260 |       0 |    0 |     0 |      0 |      0 |    0 |          0 |
-|         core_i              |                 cv32e40p_core_16 |       3985 |       3985 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|         core_i              |                 cv32e40p_core_16 |       3986 |       3986 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |           cs_registers_i    |         cv32e40p_cs_registers_17 |         92 |         92 |       0 |    0 |   461 |      0 |      0 |    0 |          0 |
 |           ex_stage_i        |             cv32e40p_ex_stage_18 |        299 |        299 |       0 |    0 |   118 |      0 |      0 |    0 |          5 |
 |           id_stage_i        |             cv32e40p_id_stage_19 |       2888 |       2888 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
@@ -91,21 +91,21 @@ Table of Contents
 |     g_pe[3].u_axi_dcu       |                 axi_master_dcu_7 |         59 |         59 |       0 |    0 |   215 |      0 |      0 |    0 |          0 |
 |     g_pe[3].u_axi_ext       |              axi_master_simple_8 |         14 |         14 |       0 |    0 |    97 |      0 |      0 |    0 |          0 |
 |     g_pe[3].u_axi_ifetch    |              axi_master_simple_9 |         15 |         15 |       0 |    0 |    57 |      0 |      0 |    0 |          0 |
-|     g_pe[3].u_pe            |           pe_top__parameterized2 |       4369 |       4369 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
-|       u_core                |                     cv32e40p_top |       4227 |       4227 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|     g_pe[3].u_pe            |           pe_top__parameterized2 |       4375 |       4375 |       0 |    0 |  2118 |      8 |      0 |    0 |          5 |
+|       u_core                |                     cv32e40p_top |       4233 |       4233 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |         (u_core)            |                     cv32e40p_top |        255 |        255 |       0 |    0 |     0 |      0 |      0 |    0 |          0 |
-|         core_i              |                    cv32e40p_core |       3988 |       3988 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
+|         core_i              |                    cv32e40p_core |       3993 |       3993 |       0 |    0 |  2101 |      0 |      0 |    0 |          5 |
 |           cs_registers_i    |            cv32e40p_cs_registers |         92 |         92 |       0 |    0 |   461 |      0 |      0 |    0 |          0 |
 |           ex_stage_i        |                cv32e40p_ex_stage |        299 |        299 |       0 |    0 |   118 |      0 |      0 |    0 |          5 |
-|           id_stage_i        |                cv32e40p_id_stage |       2889 |       2889 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
+|           id_stage_i        |                cv32e40p_id_stage |       2896 |       2896 |       0 |    0 |  1238 |      0 |      0 |    0 |          0 |
 |           if_stage_i        |                cv32e40p_if_stage |        664 |        664 |       0 |    0 |   242 |      0 |      0 |    0 |          0 |
 |           load_store_unit_i |         cv32e40p_load_store_unit |         74 |         74 |       0 |    0 |    40 |      0 |      0 |    0 |          0 |
 |       u_data_bridge         |                      data_bridge |        103 |        103 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |         u_router            |    bridge_router__parameterized0 |        103 |        103 |       0 |    0 |     8 |      0 |      0 |    0 |          0 |
 |     u_ctrl                  |                         axi_ctrl |        113 |        113 |       0 |    0 |   259 |      0 |      0 |    0 |          0 |
-|     u_sdmem                 |                         axi_sram |        727 |        727 |       0 |    0 |   154 |     64 |      0 |    0 |          0 |
-|     u_simem                 |         axi_sram__parameterized0 |        507 |        507 |       0 |    0 |    86 |      8 |      0 |    0 |          0 |
-|     u_xbar                  |                         axi_xbar |       2127 |       2127 |       0 |    0 |   279 |      0 |      0 |    0 |          0 |
+|     u_sdmem                 |                         axi_sram |        724 |        724 |       0 |    0 |   150 |     64 |      0 |    0 |          0 |
+|     u_simem                 |         axi_sram__parameterized0 |        506 |        506 |       0 |    0 |    86 |      8 |      0 |    0 |          0 |
+|     u_xbar                  |                         axi_xbar |       2125 |       2125 |       0 |    0 |   279 |      0 |      0 |    0 |          0 |
 +-----------------------------+----------------------------------+------------+------------+---------+------+-------+--------+--------+------+------------+
 * Note: The sum of lower-level cells may be larger than their parent cells total, due to cross-hierarchy LUT combining
 

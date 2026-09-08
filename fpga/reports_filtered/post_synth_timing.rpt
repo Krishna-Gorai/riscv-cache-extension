@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date              : Sat Sep  5 10:49:31 2026
+| Date              : Tue Sep  8 13:14:55 2026
 | Host              : Krishna_NITjsr running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -file C:/work/riscv-cache-extension/fpga/reports_filtered/post_synth_timing.rpt
 | Design            : fpga_top
@@ -139,7 +139,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-      8.487        0.000                      0                49635       -2.581   -37059.969                  26358                49635        2.262        0.000                       0                 16146  
+      8.487        0.000                      0                49626       -2.581   -37060.828                  26379                49626        2.262        0.000                       0                 16143  
 
 
 Timing constraints are not met.
@@ -164,7 +164,7 @@ clk300  {0.000 1.666}        3.333           300.030
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
 clk300                                                                                                                                                          2.262        0.000                       0                     1  
-  clk               8.487        0.000                      0                35507       -2.581   -17245.410                  17962                35507        6.124        0.000                       0                 16145  
+  clk               8.487        0.000                      0                35501       -2.581   -17246.268                  17983                35501        6.124        0.000                       0                 16142  
 
 
 ------------------------------------------------------------------------------------------------
@@ -183,7 +183,7 @@ From Clock    To Clock          WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS
 
 Path Group         From Clock         To Clock               WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints  
 ----------         ----------         --------               -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------  
-**async_default**  clk                clk                     15.880        0.000                      0                14128       -2.360   -19814.559                   8396                14128  
+**async_default**  clk                clk                     15.880        0.000                      0                14125       -2.360   -19814.559                   8396                14125  
 
 
 ------------------------------------------------------------------------------------------------
@@ -219,7 +219,7 @@ From Clock:  clk
   To Clock:  clk
 
 Setup :            0  Failing Endpoints,  Worst Slack        8.487ns,  Total Violation        0.000ns
-Hold  :        17962  Failing Endpoints,  Worst Slack       -2.581ns,  Total Violation   -17245.409ns
+Hold  :        17983  Failing Endpoints,  Worst Slack       -2.581ns,  Total Violation   -17246.268ns
 PW    :            0  Failing Endpoints,  Worst Slack        6.124ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 
@@ -259,7 +259,7 @@ Slack (MET) :             8.487ns  (required time - arrival time)
                          net (fo=1, unplaced)         0.280     0.855    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.152     1.007 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.584     3.591    u_soc/g_pe[3].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
+                         net (fo=7746, unplaced)      2.584     3.591    u_soc/g_pe[3].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     3.619 r  u_soc/g_pe[3].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/u_bufgce/O
                          net (fo=2099, unplaced)      2.584     6.203    u_soc/g_pe[3].u_pe/u_core/core_i/id_stage_i/clk_0
                          FDCE                                         r  u_soc/g_pe[3].u_pe/u_core/core_i/id_stage_i/alu_operand_a_ex_o_reg[25]/C
@@ -321,7 +321,7 @@ Slack (MET) :             8.487ns  (required time - arrival time)
                          net (fo=1, unplaced)         0.251    17.385    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.132    17.517 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.439    19.956    u_soc/g_pe[3].u_pe/u_instr_bridge/u_router/clk
+                         net (fo=7746, unplaced)      2.439    19.956    u_soc/g_pe[3].u_pe/u_instr_bridge/u_router/clk
                          FDCE                                         r  u_soc/g_pe[3].u_pe/u_instr_bridge/u_router/outstanding_q_reg[0]/C
                          clock pessimism              0.155    20.111    
                          clock uncertainty           -0.035    20.076    
@@ -366,7 +366,7 @@ Slack (VIOLATED) :        -2.581ns  (arrival time - required time)
                          net (fo=1, unplaced)         0.251     0.720    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.132     0.852 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.439     3.291    u_soc/g_pe[0].u_pe/u_instr_bridge/u_router/clk
+                         net (fo=7746, unplaced)      2.439     3.291    u_soc/g_pe[0].u_pe/u_instr_bridge/u_router/clk
                          FDCE                                         r  u_soc/g_pe[0].u_pe/u_instr_bridge/u_router/tgt_q_reg[0]/C
   -------------------------------------------------------------------    -------------------
                          FDCE (Prop_FDCE_C_Q)         0.058     3.349 r  u_soc/g_pe[0].u_pe/u_instr_bridge/u_router/tgt_q_reg[0]/Q
@@ -387,7 +387,7 @@ Slack (VIOLATED) :        -2.581ns  (arrival time - required time)
                          net (fo=1, unplaced)         0.280     0.855    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.152     1.007 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.584     3.591    u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
+                         net (fo=7746, unplaced)      2.584     3.591    u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     3.619 r  u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/u_bufgce/O
                          net (fo=2099, unplaced)      2.584     6.203    u_soc/g_pe[0].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/clk_0
                          FDCE                                         r  u_soc/g_pe[0].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][0]/C
@@ -462,13 +462,13 @@ Slack (MET) :             15.880ns  (required time - arrival time)
                          net (fo=1, unplaced)         0.280     0.855    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.152     1.007 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.584     3.591    clk
+                         net (fo=7746, unplaced)      2.584     3.591    clk
                          FDRE                                         r  rst_n_q_reg_rep__46/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.077     3.668 r  rst_n_q_reg_rep__46/Q
-                         net (fo=1, unplaced)         0.137     3.805    u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/hold_req_q_reg[1]_0
+                         net (fo=1, unplaced)         0.137     3.805    u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/s1_valid_q_reg_0
                          LUT1 (Prop_LUT1_I0_O)        0.038     3.843 f  u_soc/g_dcache.u_dcache/g_dcu[3].u_dcu/FSM_onehot_ccl_q[2]_i_3/O
-                         net (fo=200, unplaced)       0.287     4.130    u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/hold_req_q_reg[1]_0
+                         net (fo=200, unplaced)       0.287     4.130    u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s1_valid_q_reg_0
                          FDPE                                         f  u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/FSM_onehot_ccl_q_reg[0]/PRE
   -------------------------------------------------------------------    -------------------
 
@@ -483,7 +483,7 @@ Slack (MET) :             15.880ns  (required time - arrival time)
                          net (fo=1, unplaced)         0.251    17.385    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.132    17.517 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.439    19.956    u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/clk
+                         net (fo=7746, unplaced)      2.439    19.956    u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/clk
                          FDPE                                         r  u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/FSM_onehot_ccl_q_reg[0]/C
                          clock pessimism              0.155    20.111    
                          clock uncertainty           -0.035    20.076    
@@ -528,11 +528,11 @@ Slack (VIOLATED) :        -2.360ns  (arrival time - required time)
                          net (fo=1, unplaced)         0.251     0.720    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.132     0.852 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.439     3.291    clk
+                         net (fo=7746, unplaced)      2.439     3.291    clk
                          FDRE                                         r  rst_n_q_reg_rep__35/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.058     3.349 r  rst_n_q_reg_rep__35/Q
-                         net (fo=1, unplaced)         0.089     3.438    u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/gen_trigger_regs.tmatch_value_q_reg[31]_1
+                         net (fo=1, unplaced)         0.089     3.438    u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/gen_trigger_regs.tmatch_value_q_reg[30]_0
                          LUT1 (Prop_LUT1_I0_O)        0.023     3.461 f  u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/gen_trigger_regs.tmatch_value_q[31]_i_2/O
                          net (fo=200, unplaced)       0.195     3.656    u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/rst_n_q_reg_rep__35
                          FDCE                                         f  u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/dcsr_q_reg[cause][6]/CLR
@@ -549,7 +549,7 @@ Slack (VIOLATED) :        -2.360ns  (arrival time - required time)
                          net (fo=1, unplaced)         0.280     0.855    clk_ref
                          BUFGCE_DIV (Prop_BUFGCE_DIV_I_O)
                                                       0.152     1.007 r  u_bufgce_div/O
-                         net (fo=7749, unplaced)      2.584     3.591    u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
+                         net (fo=7746, unplaced)      2.584     3.591    u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/clk
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     3.619 r  u_soc/g_pe[0].u_pe/u_core/core_i/sleep_unit_i/core_clock_gate_i/u_bufgce/O
                          net (fo=2099, unplaced)      2.584     6.203    u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/clk_0
                          FDCE                                         r  u_soc/g_pe[0].u_pe/u_core/core_i/cs_registers_i/dcsr_q_reg[cause][6]/C

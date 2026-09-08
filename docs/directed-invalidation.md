@@ -263,53 +263,66 @@ rediscovering:
   `[uint32](x) -band y` casts before it masks and overflows. The script uses
   .NET `WriteAllText` with a no-BOM encoder and a literal seed table instead.
 
-### 5.3 FPGA cost — PARTIAL. Synthesis measured, place-and-route NOT.
+### 5.3 RESOLVED — FPGA cost re-measured, both variants, one batch
 
-Attempted `filtered` at 60 MHz on 2026-09-08. **Synthesis completed; the run was
-killed during place-and-route when the host ran out of memory.** No post-route
-number exists for the fixed RTL yet.
+Both variants re-implemented at 60 MHz on 2026-09-08 against the fixed RTL.
 
-What synthesis does say, diffing today's `post_synth_util.rpt` against the
-committed one from the 05 Sep run that produced the paper's figures:
-
-| | 05 Sep (published) | 08 Sep (with fill term) | delta |
+| | Reference | Filtered | Delta |
 |---|---|---|---|
-| CLB LUTs      | 28,046 | 28,123 | **+77** |
-| CLB Registers | 15,677 | 15,674 | **-3** |
-| CARRY8        | 556 | 564 | +8 |
+| LUTs | 26,781 | 27,845 | **+1,064** |
+| Flip-flops | 15,154 | 15,670 | **+516** |
+| BRAM / DSP | 124 / 20 | 124 / 20 | 0 |
+| WNS at 60 MHz | +1.265 ns | +1.199 ns | -0.066 |
+| Failing endpoints | 0 / 46,952 | 0 / 49,624 | — |
 
-So the fill-in-flight term costs on the order of **+77 LUTs** — the four line
-comparators and the union — against the filter's published 1,009. Synthesis hold
-slack is unchanged at -2.581 ns worst (hold is fixed in routing, so it means
-nothing here).
+The fill-in-flight term costs **+55 LUTs** on the published +1,009, and no
+measurable slack. Both configurations meet 60 MHz.
 
-**Do not put a post-route number in the paper from this.** Post-synthesis and
-post-route LUT counts differ: the published flow went 28,046 at synthesis to
-27,776 after routing, so `opt_design` and friends removed about 270. Applying
-that offset would be a guess, and the number that actually matters -- whether
-the design still meets 60 MHz -- cannot be guessed at all. The published claim
-is +1,009 LUT / +519 FF at WNS +4.307 ns; until a full run completes, the
-honest position is that the cycle results are re-measured and current while the
-FPGA cost figures predate the correctness fix by roughly 77 LUTs.
+**The important lesson here is methodological, and it caught me out mid-session.**
+Comparing the new filtered run against the *published* reference showed slack
+falling 4.307 -> 1.199 ns, which I reported as the fix consuming 72% of the
+headroom. That was wrong. Re-running the reference showed it fell too, 2.597 ->
+1.265 ns, on a netlist that is functionally unchanged (26,767 -> 26,781 LUTs,
+identical flip-flops). Nothing in the RTL could have caused that.
 
-The partial `post_synth_*.rpt` files were reverted rather than committed, so
-`fpga/reports_filtered/` stays internally consistent -- a directory holding a new
-synthesis beside an old place-and-route is a trap for whoever reads it next.
+So place-and-route outcomes on this design move by **more than the effect being
+measured** — a 1.7 ns spread, in the opposite direction, from netlists differing
+by fourteen LUTs. Within the matched batch the filter costs 66 ps on a 16.667 ns
+period.
 
-**Re-running it.** The host has ~3.2 GB free of 7.8 GB and `place_design` peaks
-near 5 GB, so this is marginal even with `set_param general.maxThreads 2` already
-set in the script. It has succeeded before (the 05 Sep run) but takes roughly
-75 minutes under swap. Run it from a quiet machine, and **not** as an agent
-background task -- the harness kills background tasks under memory pressure,
-which is exactly how this attempt died. From the Claude Code prompt:
+Rules that follow, and that the paper now states:
+
+- Quote slack only between builds implemented **in the same batch**. Never
+  compare a slack figure against one from another day.
+- A slack difference smaller than about 1.5 ns on this design is not evidence of
+  anything.
+- The published pair had the *filtered* design with 1.7 ns MORE slack than the
+  reference, which should have been recognised as implausible at the time.
+
+`results/fpga_60mhz.csv` carries the new numbers and keeps the superseded ones in
+a comment so the change stays traceable.
+
+### 5.3b OPEN — the 75 MHz pair is still old-RTL
+
+The paper justifies evaluating at 60 MHz by citing 75 MHz builds where the
+filtered design fails at -2.586 ns and the reference meets at +1.327 ns. **Those
+runs predate the fix, and given a 1.3 ns cross-run swing on a 14-LUT delta, the
+3.9 ns gap they report is less solid than it reads.** Re-running the pair at
+75 MHz is roughly 50 minutes:
 
 ```
-! vivado -mode batch -nojournal -nolog -source fpga/run_impl.tcl -tclargs filtered 16.667 sw/build/soc_bench_matmul_64.hex
+! vivado -mode batch -nojournal -nolog -source fpga/run_impl.tcl -tclargs filtered 13.333 sw/build/soc_bench_matmul_64.hex
+! vivado -mode batch -nojournal -nolog -source fpga/run_impl.tcl -tclargs coherent 13.333 sw/build/soc_bench_matmul_64.hex
 ```
 
-Then the same with `directed` in place of `filtered`, which answers the second
-question: does directed invalidation still close 60 MHz, or does it pay a
-frequency cost on top of buying nothing?
+Also unrun: the `directed` variant at 60 MHz, which would say whether directed
+invalidation costs frequency on top of buying nothing.
+
+**Running these:** launch Vivado **detached** via `Start-Process`, not as an
+agent background task — the harness kills background tasks under memory
+pressure, which is how the first attempt died mid-place-and-route.
+`place_design` peaks near 5 GB on this 7.8 GB host; with ~2.5 GB free the run
+takes 24-40 min and swaps heavily, and with more free memory it is closer to 24.
 
 ### 5.4 Paper rewrite
 
