@@ -1,0 +1,48 @@
+%% Per-module resource breakdown. Generated from
+%%   python scripts/table1.py filtered
+%% and transcribed here; regenerate that if the build changes.
+%%
+%% No total row on purpose. Vivado's figure for the SoC is not the sum of the
+%% rows above it -- a LUT shared across a hierarchy boundary counts against both
+%% children but once against the parent -- so a total sitting under the column
+%% reads as an arithmetic error. The tool's own figures are stated below the
+%% rule instead, where they are plainly a separate statement.
+\begin{table*}[t]
+\caption{Post-implementation resources, XCZU7EV at 60\,MHz. Sub-rows may sum
+slightly above their parent, because a LUT shared across a hierarchy boundary is
+counted against both children but only once against the parent. The two figures
+below the rule are the tool's own, not column sums.}
+\label{tab:fpga}
+\centering
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Module & $\times$ & LUTs & of which LUTRAM & Flip-flops & BRAM tiles & DSP \\
+\midrule
+\textbf{Processing element}          & 4  & 17{,}825 & 0   & 9{,}948 & 32 & 20 \\
+\quad RISC-V core (CV32E40P)         & 4  & 16{,}921 & 0   & 8{,}404 & 0  & 20 \\
+\quad ITCM + Instruction-Bridge      & 4  & 252      & 0   & 36      & 32 & 0  \\
+\quad Data-Bridge                    & 4  & 319      & 0   & 32      & 0  & 0  \\
+\quad AXI4 masters                   & 12 & 333      & 0   & 1{,}476 & 0  & 0  \\
+\addlinespace
+\textbf{Cache extension}             & 1  & \textbf{6{,}470} & 208 & \textbf{4{,}627} & 20 & 0 \\
+\quad Data Cache Unit                & 4  & 5{,}755  & 0   & 3{,}997 & 20 & 0  \\
+\quad\quad controller + HCL          & 4  & 2{,}802  & 0   & 2{,}845 & 0  & 0  \\
+\quad\quad tag RAM                   & 4  & 1{,}677  & 0   & 96      & 4  & 0  \\
+\quad\quad data RAM                  & 4  & 1{,}285  & 0   & 1{,}056 & 16 & 0  \\
+\quad Snoopy bus                     & 1  & 715      & 208 & 630     & 0  & 0  \\
+\quad\quad round-robin arbiter       & 1  & 185      & 0   & 2       & 0  & 0  \\
+\quad\quad Invalidation Table        & 1  & 116      & 0   & 116     & 0  & 0  \\
+\quad\quad \textbf{snoop filter (this work)} & 1 & \textbf{414} & \textbf{208} & \textbf{512} & 0 & 0 \\
+\addlinespace
+\textbf{AXI4 crossbar}               & 1  & 2{,}127  & 0   & 279     & 0  & 0  \\
+\textbf{Shared data memory}          & 1  & 727      & 0   & 154     & 64 & 0  \\
+\textbf{Shared instruction memory}   & 1  & 507      & 0   & 86      & 8  & 0  \\
+\textbf{Control region}              & 1  & 113      & 0   & 259     & 0  & 0  \\
+\midrule
+\multicolumn{7}{@{}l}{SoC as reported by the tool: 27{,}757 LUT, 15{,}353 FF,
+124 BRAM tiles, 20 DSP} \\
+\multicolumn{7}{@{}l}{Whole device including the board wrapper: 27{,}776 LUT,
+15{,}673 FF} \\
+\bottomrule
+\end{tabular}
+\end{table*}

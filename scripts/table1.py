@@ -19,7 +19,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NPE = 4
 
-COLS = ("Total LUTs", "FFs", "RAMB36", "RAMB18", "DSP Blocks")
+COLS = ("Total LUTs", "Logic LUTs", "LUTRAMs", "FFs", "RAMB36", "RAMB18", "DSP Blocks")
 
 
 def parse(variant):
@@ -115,6 +115,7 @@ def build(rows, variant):
         dat = add(*[get(rows, soc + "g_dcache.u_dcache/g_dcu[%d].u_dcu/u_data_ram" % p)
                     for p in range(NPE)])
         bus = get(rows, soc + "g_dcache.u_dcache/u_snoopy_bus")
+        filt = get(rows, soc + "g_dcache.u_dcache/u_snoopy_bus/g_filter.u_filter")
         t += [("Cache extension", 1, get(rows, soc + "g_dcache.u_dcache"), True),
               ("  Data Cache Unit (DCU)", NPE, dcus, False),
               ("    controller + HCL", NPE, ctrl, False),
@@ -124,13 +125,13 @@ def build(rows, variant):
               ("    round-robin arbiter", 1,
                get(rows, soc + "g_dcache.u_dcache/u_snoopy_bus/u_inv_arb"), False),
               ("    invalidation table", 1,
-               get(rows, soc + "g_dcache.u_dcache/u_snoopy_bus/u_inv_table"), False)]
+               get(rows, soc + "g_dcache.u_dcache/u_snoopy_bus/u_inv_table"), False),
+              ("    snoop filter (this work)", 1, filt, False)]
 
     t += [("AXI4 crossbar", 1, get(rows, soc + "u_xbar"), True),
           ("Shared data memory", 1, get(rows, soc + "u_sdmem"), True),
           ("Shared instruction memory", 1, get(rows, soc + "u_simem"), True),
-          ("Control region", 1, get(rows, soc + "u_ctrl"), True),
-          ("Total SoC", 1, get(rows, "fpga_top/u_soc"), True)]
+          ("Control region", 1, get(rows, soc + "u_ctrl"), True)]
     return t
 
 
@@ -183,21 +184,27 @@ def main():
     print("          ZCU104, xczu7ev-ffvc1156-2-e, %s, %d PEs"
           % ("%.0f MHz" % freq if freq else "unknown clock", NPE))
     print()
-    print("%-30s %4s %8s %8s %7s %6s" % ("Module", "x", "LUTs", "FFs", "BRAM", "DSPs"))
-    print("-" * 68)
+    print("%-30s %4s %8s %8s %8s %8s %7s %6s"
+          % ("Module", "x", "LUTs", "logic", "LUTRAM", "FFs", "BRAM", "DSPs"))
+    print("-" * 86)
     for label, n, r, top in table:
-        if top and label != "Total SoC":
+        if top:
             print()
-        if label == "Total SoC":
-            print("-" * 68)
-        print("%-30s %4d %8d %8d %7s %6d"
-              % (label, n, r["Total LUTs"], r["FFs"], bram(r), r["DSP Blocks"]))
+        print("%-30s %4d %8d %8d %8d %8d %7s %6d"
+              % (label, n, r["Total LUTs"], r["Logic LUTs"], r["LUTRAMs"],
+                 r["FFs"], bram(r), r["DSP Blocks"]))
     print()
+    print("-" * 86)
+    soc_r = get(rows, "fpga_top/u_soc")
     dev = get(rows, "fpga_top")
-    print("Device total incl. board wrapper: %d LUT, %d FF, %s BRAM, %d DSP"
-          % (dev["Total LUTs"], dev["FFs"], bram(dev), dev["DSP Blocks"]))
+    print("SoC as reported by the tool: %d LUT, %d FF, %s BRAM, %d DSP"
+          % (soc_r["Total LUTs"], soc_r["FFs"], bram(soc_r), soc_r["DSP Blocks"]))
+    print("Whole device, incl. board wrapper: %d LUT, %d FF"
+          % (dev["Total LUTs"], dev["FFs"]))
+    print("These are the tool's own figures, not column sums: a LUT shared")
+    print("across a hierarchy boundary counts against both children but once")
+    print("against the parent, so the rows above sum slightly high.")
     print("A RAMB18 counts as half a Block RAM tile.")
-    print("Sub-rows may exceed their parent: LUTs combine across hierarchy.")
 
 
 if __name__ == "__main__":

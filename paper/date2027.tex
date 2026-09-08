@@ -372,30 +372,22 @@ broadcasts and delivered every one that mattered.
 \subsection{FPGA cost}
 
 Both configurations were implemented on a Zynq UltraScale+ XCZU7EV in a
-non-project Vivado 2025.1 flow. Table~\ref{tab:fpga} gives the cost at 60~MHz,
-where both meet every constraint.
+non-project Vivado 2025.1 flow.
 
-\begin{table}[t]
-\caption{Post-implementation cost of the filter, XCZU7EV at 60\,MHz. Both
-configurations meet all timing constraints.}
-\label{tab:fpga}
-\centering
-\begin{tabular}{@{}lrrr@{}}
-\toprule
- & Filtered & Reference & Delta \\
-\midrule
-LUT               & 27{,}776 & 26{,}767 & $+$1{,}009 \\
-Flip-flops        & 15{,}673 & 15{,}154 & $+$519 \\
-Block RAM tiles   &      124 &      124 & 0 \\
-DSP               &       20 &       20 & 0 \\
-WNS setup (ns)    &  $+$4.307 & $+$2.597 & \\
-Failing endpoints &        0 &        0 & 0 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{tab_hier}
 
-The filter costs 1{,}009 LUTs and 519 flip-flops, under 4\% of the design, and
-no block RAM or DSP at all.
+Table~\ref{tab:fpga} gives the breakdown. The filter costs 1{,}009 LUTs and
+519 flip-flops over the unfiltered design, under 4\% of it, and no block RAM or
+DSP at all. Both configurations meet every constraint, at $+4.307$~ns and
+$+2.597$~ns of slack with no failing endpoints.
+
+Two things in the breakdown are worth drawing out. Half of the filter's 414
+LUTs are distributed RAM holding the mirror, and its 512 flip-flops are exactly
+the valid bits, four cores by 64 sets by two ways: the structure went in as
+intended, with tags in memory and only the resettable state in registers. And
+within the DCU the controller outweighs the storage, 2{,}802 LUTs against
+1{,}677 for the tag array and 1{,}285 for the data array, because at 2\,KiB the
+arrays are nearly free and the coherence logic is not.
 
 \subsection{The frequency it costs}
 
