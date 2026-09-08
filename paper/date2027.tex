@@ -52,7 +52,9 @@ still pays a cluster-wide arbitration and a handshake that waits on every other
 cache. That accounts for between 6 and 33\% of a core's execution time, and on a
 streaming kernel it makes the cache extension slower than having no cache at
 all. We add a snoop filter that keeps an exact mirror of the caches' tag arrays
-and suppresses a broadcast when no other cache holds the line. It costs 1{,}009
+and suppresses a broadcast when no other cache holds the line or is fetching it
+-- a distinction that is not cosmetic, since a mirror of committed tags alone
+loses invalidations. It costs 1{,}009
 LUTs and 519 flip-flops, preserves coherence under a version-monotonicity
 checker, and is worth a geometric mean $1.12\times$, up to $1.22\times$ on
 matrix multiplication. It also converts the streaming kernel from $0.98\times$
@@ -98,9 +100,11 @@ Our contributions are:
         necessary. On its own benchmark kernels, none of it is, and we quantify
         what that costs (Section~\ref{sec:measure}).
   \item An exact snoop filter: a structural mirror of the caches' tag arrays
-        that lets the bus suppress a broadcast when no other cache holds the
-        line. Being exact rather than conservative makes the correctness
-        argument a paragraph (Section~\ref{sec:filter}).
+        that lets the bus suppress a broadcast no cache needs. Exactness has to
+        be over the right property -- a mirror of committed tags alone is
+        unsound, because a cache with a refill in flight holds nothing yet and
+        must still be told -- and we measure how often that distinction decides
+        a coherence violation (Section~\ref{sec:filter}).
   \item An evaluation in cycles, in coherence correctness, and in
         place-and-routed FPGA cost, including the frequency the mechanism costs
         and the operating point at which it pays (Section~\ref{sec:eval}).
@@ -245,12 +249,12 @@ the original evaluation itself uses.
 
 \subsection{Structure}
 
-The bus needs to answer one question before granting an invalidation: does any
-other cache hold this line? We answer it exactly, with a mirror of the caches'
-tag and valid arrays held in the bus and updated by the same two events that
-change the caches themselves -- a refill installs a tag into a way, an
-invalidation clears one. Each DCU exports those events on a small port driven
-from the same signals that write its own arrays.
+The bus needs to answer one question before granting an invalidation: is there
+another cache that has to hear it? A mirror of the caches' tag and valid arrays
+answers it, held in the bus and updated by the same two events that change the
+caches themselves -- a refill installs a tag into a way, an invalidation clears
+one. Each DCU exports those events on a small port driven from the same signals
+that write its own arrays.
 
 Exactness is therefore structural rather than argued. The mirror is written from
 the same signals, on the same clock edge, under the same conditions as the state
@@ -264,13 +268,39 @@ far more lines than an affordable bitmap has bits; removing from one requires
 knowing when a line leaves a cache, which is exactly the information a mirror
 already has.
 
+\subsection{Exact about the wrong property}
+\label{sec:fill}
+
+A mirror of the tag arrays is exact about which lines each cache \emph{holds},
+and that turns out not to be the property the bus needs. A DCU between issuing
+its memory read and refilling the victim way holds nothing for the line it is
+fetching, so it does not appear in the mirror -- and it is precisely the cache
+that must receive the invalidation, because receiving one in that window is what
+cancels its refill. Suppress the broadcast and it installs a line that was
+invalidated while in flight.
+
+The property is residency \emph{or imminent residency}. Each DCU therefore
+exports its refill window alongside its mirror updates, and the filter answers
+over the union. The window opens when the cache issues the fetch and closes on
+the cycle the refill lands, which is the same cycle the mirror learns the tag:
+the two halves abut exactly, so the line is covered in every cycle by one or the
+other.
+
+This is not a defensive addition. Counting the granted invalidations for which
+no other cache held the line but one was fetching it -- each one a broadcast a
+committed-tag mirror would have wrongly suppressed -- our coherence testbench
+reports 20 of 2{,}241 over ten randomised interleavings, and at least one in
+every one of the ten. The window is narrow enough that the design passed 3{,}139
+checks before the counter existed, which is how a race of this shape usually
+survives a test suite.
+
 \subsection{Why suppression is safe}
 
-When the mirror reports that no other cache holds the line, no other cache holds
-it, so a broadcast would clear nothing anywhere and not sending it is
-unobservable. That is the whole argument, and it is short because the structure
-is exact. A conservative filter would need an argument about the direction of
-its error; this one does not.
+When the answer is that no other cache holds the line or is fetching it, a
+broadcast could clear nothing anywhere, and not sending it is unobservable. That
+is the whole argument, and it is short because the structure is exact. A
+conservative filter would need an argument about the direction of its error;
+this one needs only that it asks about the right state.
 
 Everything else is untouched. Invalidations that \emph{are} needed are still
 arbitrated, broadcast and acknowledged exactly as before; the single-writer
@@ -440,6 +470,24 @@ and a green test said nothing about it.
 Section~\ref{sec:eval}: neither the register count nor the storage type was the
 cause of the frequency loss.
 
+\textbf{Directed invalidation}, which is the obvious next step and does not pay.
+The mirror knows not merely \emph{whether} another cache holds the line but
+\emph{which} ones do, so the bus can drive the invalidation into exactly those
+caches and hold the grant on only those: an exact multicast with a partial
+barrier. Only an exact filter may do this -- a conservative one may over-claim
+sharers safely under suppression, but under multicast a missing sharer bit loses
+an invalidation instead of costing a redundant broadcast. We built it and
+measured it on a halo-exchange stencil, a Jacobi 5-point kernel split into row
+bands so that each band boundary is written by one PE and read by its
+neighbour, giving a sharer set of exactly one of the three other caches. It
+behaves perfectly: 168 invalidations delivered, all 168 useful, against
+suppression's 504, and the residual snoop stall falls elevenfold. It is also
+worth 0.1--0.3\%, at every memory latency we tried. Exact suppression has
+already removed the traffic that was causing the serialisation, and what is left
+is irreducible -- somebody really does have to be told, and the writer really
+does have to wait for them. Once the filter is exact, the residue is not worth
+steering.
+
 % =============================================================================
 \section{Related Work}
 % =============================================================================
@@ -493,9 +541,12 @@ The central measurement is that none of the invalidation traffic is useful, and
 that is a property of workloads as much as of the design. Data-parallel kernels
 that partition per core have almost nothing to share. We claim only what we
 measured: on the kernels the original evaluation itself uses, this design's
-coherence traffic is entirely avoidable. A workload with genuine sharing would
-see less benefit, and our own coherence testbench, at roughly half its
-invalidations useful, is the extreme case in the other direction.
+coherence traffic is entirely avoidable. The halo-exchange stencil of
+Section~\ref{sec:rejected} is the case with genuine sharing, and the filter is
+still worth $1.11\times$ there at a memory latency of twenty, because the
+interior of each band is private even when its boundary is not. Our coherence
+testbench, at roughly half its invalidations useful, is the extreme in the other
+direction.
 
 The evaluation is in cycles from RTL simulation and in post-place-and-route
 resource and timing figures; no bitstream has been run on hardware. The original
