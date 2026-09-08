@@ -10,7 +10,7 @@
 #  The sizes and goldens are not written down here: they come straight out of
 #  scripts/bench_golden.py, the independent model, so the two cannot drift.
 #
-#  Usage:  sw/build_bench.sh              build all 14
+#  Usage:  sw/build_bench.sh              build all 15
 #          sw/build_bench.sh fft          build one kernel's sweep
 # =============================================================================
 set -euo pipefail
@@ -26,6 +26,9 @@ python "$root/scripts/bench_golden.py" --defs | while read -r kern size param go
     matmul) def="-DBENCH_N=${param}u";     sfx="_${param}"  ;;
     conv2d) def="-DBENCH_N=${param}u";     sfx="_${param}"  ;;
     fft)    def="-DBENCH_LOG2N=${param}u"; sfx="_$(( 1 << param ))" ;;
+    # T is fixed across the stencil sweep, so it is spelled here rather than
+    # carried through bench_golden.py's --defs line; keep the two in step.
+    stencil) def="-DBENCH_N=${param}u -DBENCH_T=8u"; sfx="_${param}" ;;
     *) echo "unknown kernel $kern" >&2; exit 1 ;;
   esac
 

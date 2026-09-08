@@ -150,10 +150,35 @@ def bench_fft(log2n=7):
 
 NPE        = 4                       # PEs in the SoC under test
 
+# ---------------------------------------------------------------------------
+#  stencil -- Jacobi 5-point, double buffered, T steps over an NxN grid with a
+#  fixed border. The kernel that actually shares: each PE owns a band of rows
+#  and reads one row beyond it at each end, so the boundary rows are written by
+#  one PE and read by its neighbour. Everything stays in [0, 250], so the >> 2
+#  is unambiguous in both languages.
+# ---------------------------------------------------------------------------
+def bench_stencil(N=32, T=8):
+    H = W = N
+    src = [[(y * W + x) % 251 for x in range(W)] for y in range(H)]
+    dst = [[0] * W for _ in range(H)]
+    for _ in range(T):
+        for y in range(H):
+            for x in range(W):
+                if y == 0 or y == H - 1 or x == 0 or x == W - 1:
+                    dst[y][x] = src[y][x]
+                else:
+                    dst[y][x] = (src[y - 1][x] + src[y + 1][x]
+                                 + src[y][x - 1] + src[y][x + 1]) >> 2
+        src, dst = dst, src
+    return csum([src[y][x] for y in range(H) for x in range(W)])
+
+
 MEMCPY_KIB = [4, 8, 16, 32]          # Fig. 5 x-axis
 MATMUL_N   = [32, 64, 128]           # Fig. 6/7 x-axis
 CONV2D_N   = [32, 64, 128]           # Fig. 6/7 x-axis
 FFT_LOG2   = [7, 8, 9, 10]           # Fig. 6/7 x-axis: 128 .. 1024
+STENCIL_N  = [32]                    # partial-sharing point; see bench_stencil.c
+STENCIL_T  = 8                       # steps, fixed across the sweep
 
 
 if __name__ == "__main__":
@@ -168,6 +193,8 @@ if __name__ == "__main__":
         rows.append(("conv2d", "%dx%d" % (n, n), n, bench_conv2d(n)))
     for lg in FFT_LOG2:
         rows.append(("fft", "N=%d" % (1 << lg), lg, bench_fft(lg)[0]))
+    for n in STENCIL_N:
+        rows.append(("stencil", "%dx%d" % (n, n), n, bench_stencil(n, STENCIL_T)))
 
     if "--defs" in sys.argv:
         # emitted so build_bench.sh can compile one image per configuration
