@@ -40,6 +40,20 @@ module snoopy_bus
   // cache holds the line. See rtl/snoop/snoop_filter.sv for why a mirror rather
   // than a hash, and results/invalidation_use.csv for why it is worth having.
   parameter  bit          SnoopFilter = 1'b0,
+
+  // Directed invalidation. 0 keeps the published broadcast bus: a granted
+  // invalidation goes to every other DCU and the grant is held until every
+  // other DCU is ready. 1 uses the mirror's per-core sharer vector to drive the
+  // invalidation into exactly the caches that hold the line, and to hold the
+  // grant on only those -- an exact multicast with a partial barrier.
+  //
+  // This is what exactness buys that approximation cannot. A conservative
+  // filter may over-claim sharers safely, so it can gate an all-or-nothing
+  // broadcast; but under multicast a missing sharer bit drops an invalidation
+  // that was needed, so only an exact mirror may steer the fan-out. Requires
+  // SnoopFilter -- there is no sharer vector without the mirror.
+  parameter  bit          DirectedInv = 1'b0,
+
   // Geometry of the caches being mirrored; ignored when SnoopFilter is 0.
   parameter  int unsigned NumWays   = 2,
   parameter  int unsigned NumSets   = 64,
@@ -75,7 +89,12 @@ module snoopy_bus
   input  logic [NumCores*IdxW-1:0]  dir_set_i,
   input  logic [NumCores*WayW-1:0]  dir_way_i,
   input  logic [NumCores*TagW-1:0]  dir_tag_i,
-  input  logic [NumCores-1:0]       dir_inst_i
+  input  logic [NumCores-1:0]       dir_inst_i,
+
+  // --- refill in flight, one per DCU ----------------------------------------
+  // The other half of "who has to hear this". See the note on bcast_tgt.
+  input  logic [NumCores-1:0]       fill_busy_i,
+  input  logic [NumCores*AddrW-1:0] fill_addr_i
 );
 
   function automatic logic same_line(input logic [AddrW-1:0] a,
@@ -145,10 +164,11 @@ module snoopy_bus
   // ---------------------------------------------------------------------------
   //  Snoop filter -- is there anybody to tell?
   //
-  //  The mirror is exact, so filt_any_other is exact: when it is low, no other
-  //  cache holds the line and a broadcast would clear nothing anywhere. Not
-  //  sending it is therefore unobservable, which is a considerably easier thing
-  //  to argue than the two mechanisms this replaced.
+  //  The mirror is exact about what each cache holds, but "holds" is not the
+  //  property the bus needs. A cache with a refill in flight holds nothing for
+  //  the line and still has to hear the invalidation. So the mirror answers
+  //  half the question here and filling_line below answers the other half; only
+  //  their union, any_sharer, is safe to gate a broadcast on.
   //
   //  Held high when the filter is not built, so bcast_needed keeps its
   //  published meaning and the two designs differ in one parameter.
@@ -157,8 +177,17 @@ module snoopy_bus
   // explicit default rather than a variable: a variable left undriven in the
   // branch that is not taken reads as X, and an X here propagates straight into
   // bcast_needed and quietly changes what the bus does.
-  wire filt_any_other;
   logic filt_from_mirror;
+
+  // Per-core sharer vector, the requester's own bit already cleared by the
+  // mirror. Defaults to "everybody" when there is no mirror to ask, so that a
+  // build without the filter keeps the published fan-out exactly.
+  wire  [NumCores-1:0] filt_held;
+  logic [NumCores-1:0] filt_held_mirror;
+
+  if (DirectedInv && !SnoopFilter) begin : g_bad_cfg
+    initial $fatal(1, "snoopy_bus: DirectedInv requires SnoopFilter");
+  end
 
   if (SnoopFilter) begin : g_filter
     snoop_filter #(
@@ -177,22 +206,62 @@ module snoopy_bus
       .upd_inst_i  (dir_inst_i),
       .qry_addr_i  (win_addr),
       .qry_core_i  (inv_arb_idx),
-      .held_o      (),
+      .held_o      (filt_held_mirror),
       .any_other_o (filt_from_mirror)
     );
   end else begin : g_no_filter
     assign filt_from_mirror = 1'b1;
+    assign filt_held_mirror = {NumCores{1'b1}};
   end
 
   // One driver, at module scope, so there is no doubt what this is when the
   // filter is not built.
-  assign filt_any_other = SnoopFilter ? filt_from_mirror : 1'b1;
+  assign filt_held      = SnoopFilter ? filt_held_mirror : {NumCores{1'b1}};
+
+  // ---------------------------------------------------------------------------
+  //  Caches that do not hold the line yet, but are about to.
+  //
+  //  A DCU between its MEM READ REQ and its refill holds nothing for the line,
+  //  so the tag mirror -- which is exact about committed state -- reports it as
+  //  not a sharer. It is nonetheless the cache that most needs the
+  //  invalidation: receiving one in that window is what cancels its refill
+  //  ("special case 2" in dcu.sv). Suppressing or steering around it lets it
+  //  install a line that was invalidated while in flight.
+  //
+  //  So the filter's answer is residency OR imminent residency. This term is
+  //  what makes the mirror exact with respect to the property that actually
+  //  matters, and it is required for plain suppression as much as for directed
+  //  invalidation: the empty-sharer-set case is wrong in precisely the same way
+  //  when the set looks empty only because a fill has not landed yet.
+  // ---------------------------------------------------------------------------
+  logic [NumCores-1:0] filling_line;
+
+  always @(*) begin
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      filling_line[c] = fill_busy_i[c] &&
+                        same_line(fill_addr_i[c*AddrW +: AddrW], win_addr);
+    end
+  end
+
+  // The complete sharer set: holds it, or is fetching it. The requester is
+  // never in it.
+  logic [NumCores-1:0] sharers;
+  logic                any_sharer;
+
+  always @(*) begin
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      sharers[c] = (filt_held[c] || filling_line[c]) &&
+                   (int'(inv_arb_idx) != c);
+    end
+  end
+
+  assign any_sharer = SnoopFilter ? (|sharers) : 1'b1;
 
   // A store-conditional that lost its reservation performs no write, so it
   // needs no invalidation broadcast -- it is granted purely to release the
   // requesting DCU's stage 1.
   assign bcast_needed = inv_arb_valid && !(win_is_sc && !sc_excl_ok)
-                        && filt_any_other
+                        && any_sharer
 `ifdef ORACLE_NOBCAST
     // -------------------------------------------------------------------------
     //  MEASUREMENT INSTRUMENT. NOT A DESIGN. Never define this for a build.
@@ -215,10 +284,33 @@ module snoopy_bus
 `endif
     ;
 
+  // ---------------------------------------------------------------------------
+  //  Which DCUs a granted invalidation must actually reach.
+  //
+  //  Published behaviour is every other DCU. With DirectedInv it is exactly the
+  //  DCUs the mirror says hold the line, which is a subset -- often empty, in
+  //  which case bcast_needed is already low and this is all zero anyway.
+  //
+  //  The requester is excluded explicitly as well as by the mirror: a core
+  //  never invalidates its own copy through the bus, it updates or drops that
+  //  itself, and the guard has to hold on the un-mirrored path too.
+  // ---------------------------------------------------------------------------
+  logic [NumCores-1:0] bcast_tgt;
+
+  always @(*) begin
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      bcast_tgt[c] = bcast_needed && (int'(inv_arb_idx) != c) &&
+                     (!DirectedInv || sharers[c]);
+    end
+  end
+
+  // The grant now waits only on the DCUs that are actually being told. A DCU
+  // that does not hold the line has nothing to accept, so making the writer
+  // wait for it was the serialisation this work removes.
   always @(*) begin
     others_ready = 1'b1;
     for (int unsigned c = 0; c < NumCores; c++) begin
-      if (c != int'(inv_arb_idx) && !inv_ready_i[c]) others_ready = 1'b0;
+      if (bcast_tgt[c] && !inv_ready_i[c]) others_ready = 1'b0;
     end
   end
 
@@ -260,7 +352,15 @@ module snoopy_bus
           read_blocked[r] = 1'b1;
         end
       end
-      // an invalidation granted in this very cycle locks the line as well
+      // An invalidation granted in this very cycle locks the line as well.
+      //
+      // Deliberately NOT restricted to bcast_tgt. This lock protects a reader
+      // from fetching the pre-write value out of shared memory, which has
+      // nothing to do with whether that reader currently caches the line -- a
+      // core with no copy at all is precisely the one that would miss, go to
+      // memory and cache a stale word. Narrowing this to the sharer set would
+      // pass every functional test and be wrong, in the same way the
+      // hit-speculative bypass was.
       if (inv_gnt_valid && bcast_needed && (int'(inv_arb_idx) != r) &&
           same_line(win_addr, addr_i[r*AddrW +: AddrW])) begin
         read_blocked[r] = 1'b1;
@@ -353,6 +453,45 @@ module snoopy_bus
       $display(" FALSESHARE blocked=0 false=0 pct=0.00");
     end
   end
+
+  // ---------------------------------------------------------------------------
+  //  Measurement only: how often would a committed-tag mirror alone be wrong?
+  //
+  //  dbg_fill_saved counts granted invalidations where no other cache HOLDS the
+  //  line but at least one is FETCHING it. Those are exactly the cases a filter
+  //  built on the tag mirror alone would have suppressed -- or, under directed
+  //  invalidation, steered away from -- leaving that cache to install a line
+  //  that had already been invalidated.
+  //
+  //  This is not a tuning statistic. A non-zero value here is a count of the
+  //  times the mirror-only design would have violated coherence, so it is the
+  //  evidence that the fill-in-flight term is load-bearing rather than
+  //  defensive. It is reported alongside the total for scale.
+  // ---------------------------------------------------------------------------
+  int unsigned dbg_inv_granted;  // invalidations granted with a real fan-out
+  int unsigned dbg_fill_saved;   // of those, held only by a fill in flight
+
+  logic [NumCores-1:0] held_masked;
+  always @(*) begin
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      held_masked[c] = filt_held[c] && (int'(inv_arb_idx) != c);
+    end
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      dbg_inv_granted <= 0;
+      dbg_fill_saved  <= 0;
+    end else if (inv_gnt_valid && bcast_needed) begin
+      dbg_inv_granted <= dbg_inv_granted + 1;
+      if (!(|held_masked)) dbg_fill_saved <= dbg_fill_saved + 1;
+    end
+  end
+
+  final begin
+    $display(" FILLRACE granted=%0d saved_by_fill_term=%0d",
+             dbg_inv_granted, dbg_fill_saved);
+  end
 `endif
 
   // ---------------------------------------------------------------------------
@@ -388,6 +527,11 @@ module snoopy_bus
     .lr_set_i     (lr_arb_valid),
     .lr_core_i    (lr_arb_idx),
     .lr_addr_i    (addr_i[lr_arb_idx*AddrW +: AddrW]),
+    // Also deliberately NOT restricted to bcast_tgt: a reservation must break
+    // whether or not the reserving core still has the line cached. LR takes a
+    // reservation, and the line can be evicted under it by ordinary capacity
+    // pressure without releasing it; steering this by cache residency would
+    // let an SC succeed over a remote write.
     .inv_set_i    (inv_gnt_valid && bcast_needed),
     .inv_addr_i   (win_addr),
     .sc_core_i    (inv_arb_idx),
@@ -420,7 +564,7 @@ module snoopy_bus
     inv_valid_o = '0;
     inv_addr_o  = '0;
     for (int unsigned c = 0; c < NumCores; c++) begin
-      if (inv_gnt_valid && bcast_needed && (int'(inv_arb_idx) != c)) begin
+      if (inv_gnt_valid && bcast_tgt[c]) begin
         inv_valid_o[c]                = 1'b1;
         inv_addr_o[c*AddrW +: AddrW]  = win_addr;
       end

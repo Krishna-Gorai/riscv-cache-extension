@@ -136,7 +136,24 @@ module dcu
   output logic [IdxW-1:0]       dir_set_o,
   output logic [WayW-1:0]       dir_way_o,
   output logic [TagW-1:0]       dir_tag_o,
-  output logic                  dir_inst_o      // 1 = installed, 0 = cleared
+  output logic                  dir_inst_o,     // 1 = installed, 0 = cleared
+
+  // ---------------------------------------------------------------------------
+  //  Fill in flight, for the snoop filter.
+  //
+  //  A mirror of the tag arrays describes what this cache holds NOW. That is
+  //  not what a filter needs to know. Between issuing a MEM READ REQ and
+  //  refilling the victim way, this DCU holds nothing for the line but is about
+  //  to, and an invalidation that arrives in that window is what cancels the
+  //  refill -- "special case 2" below. A filter that consults committed tags
+  //  alone would see no copy, and steer the invalidation away from the one
+  //  cache that had to hear it, which installs a stale line.
+  //
+  //  So the filter's question is really "does anyone else hold this line, or is
+  //  anyone else about to", and this is the second half of that answer.
+  // ---------------------------------------------------------------------------
+  output logic                  fill_busy_o,    // a refill is in flight
+  output logic [AddrW-1:0]      fill_addr_o     // the line being fetched
 );
 
   // ---------------------------------------------------------------------------
@@ -636,6 +653,13 @@ module dcu
   assign dir_set_o  = s2_idx;
   assign dir_way_o  = fill_en ? victim_way : hit_way;
   assign dir_tag_o  = tag_of(s2_addr_q);
+
+  // The refill window, exported for the filter. It opens when stage 2 enters
+  // CCL_RD_WAIT and closes when the MEM RESP refills the way -- which is the
+  // same cycle the mirror learns the tag, so the two halves of the answer abut
+  // exactly and the line is covered in every cycle by one or the other.
+  assign fill_busy_o = (ccl_q == CCL_RD_WAIT);
+  assign fill_addr_o = s2_addr_q;
 
 `ifndef SYNTHESIS
   // A refill and an invalidation must never target the same way in one cycle,

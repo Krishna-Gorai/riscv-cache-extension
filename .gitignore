@@ -74,3 +74,10 @@ paper/build*.log
 sim/out_lat_*/
 sim/out_sweep_*/
 sweep_*.log
+
+# ---- simulator run directories ----
+# run_xsim.ps1 -OutDir creates one directory per configuration, holding nothing
+# but regenerable simulator state. Only files directly in sim/ are tracked, so
+# one rule covers every run directory and supersedes the enumerated sim/out_*
+# entries above, which were added one at a time as sweeps were written.
+sim/*/

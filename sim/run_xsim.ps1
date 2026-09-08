@@ -106,6 +106,7 @@ $needCore = @("tb_pe", "tb_soc", "tb_soc_nc",
               "tb_bench_l8", "tb_bench_nc_l8",
               "tb_bench_l20", "tb_bench_nc_l20",
               "tb_bench_sf", "tb_bench_sf_l8", "tb_bench_sf_l20",
+              "tb_bench_di", "tb_bench_di_l8", "tb_bench_di_l20",
               "tb_bench_w4", "tb_bench_c8k",
               "tb_bench_c16k") -contains $Tb
 $allSrcs  = if ($needCore) { $cvSrcs + $srcs } else { $srcs }
@@ -165,7 +166,7 @@ if ($Saif -ne "") {
 } else {
   @("run all", "quit") | Set-Content -Encoding ascii $tcl
 }
-if ($Plusargs -ne "") { & $xsim "${Tb}_snap" -tclbatch $tcl --nolog -testplusarg $Plusargs }
+if ($Plusargs -ne "") { & $xsim "${Tb}_snap" -tclbatch $tcl --nolog --testplusarg $Plusargs }
 else                  { & $xsim "${Tb}_snap" -tclbatch $tcl --nolog }
 $rc = $LASTEXITCODE
 Pop-Location

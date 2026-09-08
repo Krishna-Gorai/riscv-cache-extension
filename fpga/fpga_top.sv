@@ -31,6 +31,7 @@ module fpga_top #(
   // Snoop filter; see rtl/snoop/snoop_filter.sv. Its cost is the point of the
   // filtered build, so it is a generic rather than a hardcoded choice.
   parameter bit          SnoopFilter = 1'b0,
+  parameter bit          DirectedInv = 1'b0,
   // Program baked into the shared instruction memory. The build passes an
   // absolute path; without one the implemented design has nothing to fetch.
   parameter string       ProgramHex = ""
@@ -127,7 +128,8 @@ module fpga_top #(
     .NumWays   (NumWays),
     .NumSets   (NumSets),
     .SimemInit   (ProgramHex),
-    .SnoopFilter (SnoopFilter)
+    .SnoopFilter (SnoopFilter),
+    .DirectedInv (DirectedInv)
   ) u_soc (
     .clk_i               (clk),
     .rst_ni              (rst_n_q),

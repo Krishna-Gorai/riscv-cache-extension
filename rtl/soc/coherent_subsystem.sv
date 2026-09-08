@@ -24,6 +24,7 @@ module coherent_subsystem
   // Snoop filter; see rtl/snoop/snoop_filter.sv. Threaded rather than hardcoded
   // so one parameter separates the two designs, as Coherent does elsewhere.
   parameter  bit          SnoopFilter  = 1'b0,
+  parameter  bit          DirectedInv  = 1'b0,
 
   localparam int unsigned WordBytes    = DataW / 8,
   localparam int unsigned LineBits     = LineBytes * 8,
@@ -93,6 +94,8 @@ module coherent_subsystem
   logic [NumCores*WayW-1:0] dir_way;
   logic [NumCores*TagW-1:0] dir_tag;
   logic [NumCores-1:0]      dir_inst;
+  logic [NumCores-1:0]       fill_busy;
+  logic [NumCores*AddrW-1:0] fill_addr;
 
   for (genvar c = 0; c < NumCores; c++) begin : g_dcu
     amo_e dcu_amo;
@@ -170,7 +173,9 @@ module coherent_subsystem
       .dir_set_o         (dir_set[c*IdxW +: IdxW]),
       .dir_way_o         (dir_way[c*WayW +: WayW]),
       .dir_tag_o         (dir_tag[c*TagW +: TagW]),
-      .dir_inst_o        (dir_inst[c])
+      .dir_inst_o        (dir_inst[c]),
+      .fill_busy_o       (fill_busy[c]),
+      .fill_addr_o       (fill_addr[c*AddrW +: AddrW])
     );
   end
 
@@ -179,6 +184,7 @@ module coherent_subsystem
     .AddrW       (AddrW),
     .LineBytes   (LineBytes),
     .SnoopFilter (SnoopFilter),
+    .DirectedInv (DirectedInv),
     .NumWays     (NumWays),
     .NumSets     (NumSets)
   ) u_snoopy_bus (
@@ -200,7 +206,9 @@ module coherent_subsystem
     .dir_set_i   (dir_set),
     .dir_way_i   (dir_way),
     .dir_tag_i   (dir_tag),
-    .dir_inst_i  (dir_inst)
+    .dir_inst_i  (dir_inst),
+    .fill_busy_i (fill_busy),
+    .fill_addr_i (fill_addr)
   );
 
 endmodule

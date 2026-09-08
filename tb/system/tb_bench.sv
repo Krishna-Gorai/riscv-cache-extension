@@ -29,7 +29,8 @@ module bench_harness #(
   parameter int unsigned NumWays  = 2,
   parameter int unsigned NumSets  = 64,
   // Snoop filter; see rtl/snoop/snoop_filter.sv.
-  parameter bit          SnoopFilter = 1'b0
+  parameter bit          SnoopFilter = 1'b0,
+  parameter bit          DirectedInv = 1'b0
 );
 
   import cache_pkg::*;
@@ -76,6 +77,7 @@ module bench_harness #(
     .NumPes     (NumPes),
     .Coherent   (Coherent),
     .SnoopFilter (SnoopFilter),
+    .DirectedInv (DirectedInv),
     .NumWays    (NumWays),
     .NumSets    (NumSets),
     .LineBytes  (LineBytes),
@@ -384,6 +386,27 @@ endmodule
 module tb_bench_sf_l20;
   bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent filtered]"),
                   .MemLat(20), .SnoopFilter(1'b1)) h ();
+endmodule
+
+// -----------------------------------------------------------------------------
+//  With directed invalidation: the filter, plus the fan-out and the barrier
+//  restricted to the caches the mirror says are sharers. These differ from the
+//  _sf variants above in one parameter, so a difference between them is the
+//  direction and nothing else.
+// -----------------------------------------------------------------------------
+module tb_bench_di;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent directed]"),
+                  .SnoopFilter(1'b1), .DirectedInv(1'b1)) h ();
+endmodule
+
+module tb_bench_di_l8;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent directed]"),
+                  .MemLat(8), .SnoopFilter(1'b1), .DirectedInv(1'b1)) h ();
+endmodule
+
+module tb_bench_di_l20;
+  bench_harness #(.Coherent(1'b1), .Label("tb_bench [coherent directed]"),
+                  .MemLat(20), .SnoopFilter(1'b1), .DirectedInv(1'b1)) h ();
 endmodule
 
 module tb_bench_l8;

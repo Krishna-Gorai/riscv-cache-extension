@@ -87,14 +87,37 @@ module tb_coherent_subsystem;
   // matters -- a filter that wrongly suppressed a broadcast would lose an
   // invalidation, and the version-monotonicity checker would see a core observe
   // an older value than one it had already seen.
+// Stress seed. Fixed by default so the standard run is reproducible; override
+// with -d STRESS_SEED=<n> to put a protocol change under many different
+// interleavings rather than only the one it was developed against. The
+// fill-in-flight race this bus now covers appeared once in 211 invalidations
+// on the default seed, which is exactly the frequency a single run misses.
+`ifndef STRESS_SEED
+`define STRESS_SEED 32'h5EED_1234
+`endif
+
 `ifdef SNOOP_FILTER
   localparam bit UseFilter = 1'b1;
 `else
   localparam bit UseFilter = 1'b0;
 `endif
 
+  // Directed invalidation is a strictly stronger claim than suppression, and
+  // this is the workload that can falsify it. Suppression only ever drops a
+  // broadcast when the sharer set is empty, so a wrong mirror shows up as a
+  // lost invalidation only in the empty case; multicast steers the fan-out on
+  // every invalidation, so a mirror bit that is wrong for ANY core loses an
+  // invalidation to that core. With sharing at 37.5 % of invalidations, the
+  // version-monotonicity checker sees it.
+`ifdef DIRECTED_INV
+  localparam bit UseDirected = 1'b1;
+`else
+  localparam bit UseDirected = 1'b0;
+`endif
+
   coherent_subsystem #(
     .SnoopFilter (UseFilter),
+    .DirectedInv (UseDirected),
     .NumCores  (NumCores),
     .NumWays   (NumWays),
     .NumSets   (NumSets),
@@ -393,7 +416,13 @@ module tb_coherent_subsystem;
       // xsim does not implement $urandom(seed); process::self().srandom is the
       // portable way, and seeding before the fork gives each spawned process a
       // deterministic stream derived from it.
-      process::self().srandom(32'h5EED_1234);
+      // The default is fixed so the standard run is reproducible; +SEED=<n>
+      // overrides it, so a protocol change can be put under many different
+      // interleavings rather than the one it was developed against. A
+      // coherence bug that only a particular ordering exposes is the norm, not
+      // the exception -- the fill-in-flight race this bus now covers showed up
+      // once in 211 invalidations on the default seed.
+      process::self().srandom(`STRESS_SEED);
       for (int unsigned c = 0; c < NumCores; c++) begin
         fork
           automatic int unsigned cc = c;
