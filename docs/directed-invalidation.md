@@ -263,16 +263,53 @@ rediscovering:
   `[uint32](x) -band y` casts before it masks and overflows. The script uses
   .NET `WriteAllText` with a no-BOM encoder and a literal seed table instead.
 
-### 5.3 FPGA cost of the fix and of directed invalidation
+### 5.3 FPGA cost — PARTIAL. Synthesis measured, place-and-route NOT.
 
-`fpga/run_impl.tcl` has a new `directed` variant (coherent + filter + direction).
-Not yet run. Two questions:
+Attempted `filtered` at 60 MHz on 2026-09-08. **Synthesis completed; the run was
+killed during place-and-route when the host ran out of memory.** No post-route
+number exists for the fixed RTL yet.
 
-- What does the fill-in-flight term cost? It adds four line comparators to a path
-  that already costs frequency — the filtered build fails at 75 MHz
-  (−2.586 ns) and the paper evaluates at 60 MHz for that reason.
-- Does `directed` still close 60 MHz? If not, the negative result gets stronger
-  still: pays nothing, costs frequency.
+What synthesis does say, diffing today's `post_synth_util.rpt` against the
+committed one from the 05 Sep run that produced the paper's figures:
+
+| | 05 Sep (published) | 08 Sep (with fill term) | delta |
+|---|---|---|---|
+| CLB LUTs      | 28,046 | 28,123 | **+77** |
+| CLB Registers | 15,677 | 15,674 | **-3** |
+| CARRY8        | 556 | 564 | +8 |
+
+So the fill-in-flight term costs on the order of **+77 LUTs** — the four line
+comparators and the union — against the filter's published 1,009. Synthesis hold
+slack is unchanged at -2.581 ns worst (hold is fixed in routing, so it means
+nothing here).
+
+**Do not put a post-route number in the paper from this.** Post-synthesis and
+post-route LUT counts differ: the published flow went 28,046 at synthesis to
+27,776 after routing, so `opt_design` and friends removed about 270. Applying
+that offset would be a guess, and the number that actually matters -- whether
+the design still meets 60 MHz -- cannot be guessed at all. The published claim
+is +1,009 LUT / +519 FF at WNS +4.307 ns; until a full run completes, the
+honest position is that the cycle results are re-measured and current while the
+FPGA cost figures predate the correctness fix by roughly 77 LUTs.
+
+The partial `post_synth_*.rpt` files were reverted rather than committed, so
+`fpga/reports_filtered/` stays internally consistent -- a directory holding a new
+synthesis beside an old place-and-route is a trap for whoever reads it next.
+
+**Re-running it.** The host has ~3.2 GB free of 7.8 GB and `place_design` peaks
+near 5 GB, so this is marginal even with `set_param general.maxThreads 2` already
+set in the script. It has succeeded before (the 05 Sep run) but takes roughly
+75 minutes under swap. Run it from a quiet machine, and **not** as an agent
+background task -- the harness kills background tasks under memory pressure,
+which is exactly how this attempt died. From the Claude Code prompt:
+
+```
+! vivado -mode batch -nojournal -nolog -source fpga/run_impl.tcl -tclargs filtered 16.667 sw/build/soc_bench_matmul_64.hex
+```
+
+Then the same with `directed` in place of `filtered`, which answers the second
+question: does directed invalidation still close 60 MHz, or does it pay a
+frequency cost on top of buying nothing?
 
 ### 5.4 Paper rewrite
 
