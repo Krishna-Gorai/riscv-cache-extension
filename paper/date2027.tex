@@ -58,8 +58,8 @@ loses invalidations. It costs 1{,}064
 LUTs and 516 flip-flops, preserves coherence under a version-monotonicity
 checker, and is worth a geometric mean $1.12\times$, up to $1.22\times$ on
 matrix multiplication. It also converts the streaming kernel from $0.98\times$
-to $1.10\times$ against an uncached baseline. We report the frequency it costs,
-and evaluate at the original design's own 60~MHz operating point.
+to $1.10\times$ against an uncached baseline, at the original design's own
+60~MHz operating point and for 66\,ps of timing slack.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -213,8 +213,8 @@ for each kernel at three memory latencies.
 \centering
 \includegraphics[width=\columnwidth]{fig_stall.pdf}
 \caption{Time each core spends waiting for a snoopy-bus grant, as a percentage
-of the cycles it had an access in the DCU. Table~\ref{tab:invuse} shows that
-none of the traffic it is waiting for is necessary.}
+of the cycles it had an access in the DCU. None of the traffic it is waiting
+for turns out to be necessary.}
 \label{fig:stall}
 \end{figure}
 
@@ -235,29 +235,16 @@ left.
 \subsection{None of the invalidations are necessary}
 
 Each DCU therefore counts the broadcasts it receives and how many find a line to
-clear. Table~\ref{tab:invuse} gives the result.
+clear.
 
-\begin{table}[t]
-\caption{Invalidation broadcasts received across the cluster, and how many
-invalidated a line. The last row is a control.}
-\label{tab:invuse}
-\centering
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Workload & Broadcasts & Useful & \% \\
-\midrule
-matmul ($64^2$)      & 823{,}338 & 0 & 0.00 \\
-conv2d ($64^2$)      & 139{,}182 & 0 & 0.00 \\
-FFT ($N{=}256$)      &  61{,}683 & 0 & 0.00 \\
-memcpy (16\,KiB)     &  24{,}618 & 0 & 0.00 \\
-\midrule
-sharing testbench    &       921 & 345 & 37.46 \\
-\bottomrule
-\end{tabular}
-\end{table}
+%% This was a five-row table whose entire result column read 0.00. Prose states
+%% that as well as a table does, and the page it freed went to Table
+%% \ref{tab:exec}, whose 27 distinct values prose cannot carry.
 
-Over a million broadcasts, none of which invalidated anything. Each one paid a
-cluster-wide arbitration and a four-way handshake to inform nobody of anything.
+The counts are 823{,}338 broadcasts on matmul, 139{,}182 on conv2d, 61{,}683 on
+FFT and 24{,}618 on memcpy -- over a million in total, and the useful column is
+zero in every one of the four. Each one paid a cluster-wide arbitration and a
+four-way handshake to inform nobody of anything.
 
 A result this uniform deserves suspicion of the instrument rather than of the
 design, so the counter is controlled. Our coherence testbench shares
@@ -362,48 +349,48 @@ and 3{,}202 LUTs, against 512 and 408 for the structure above.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{fig_exec.pdf}
-\caption{Execution time of the three benchmark kernels against problem size,
-without a data cache, with one, and with the snoop filter of this work. The
-axes are those of the original's own execution-time figure, so the first two
-bars of each cluster are directly comparable with it. Matrix multiplication and
-convolution reproduce the reduction it reports; FFT does not, and the reason is
-capacity rather than coherence -- see the text.}
+\caption{Execution time against problem size, without a data cache, with one,
+and with the snoop filter of this work. The axes are the original's own, so the
+first two bars of each cluster are directly comparable with it.
+Table~\ref{tab:exec} gives the values.}
 \label{fig:exec}
 \end{figure*}
+
+\input{tab_exec}
 
 Fig.~\ref{fig:exec} places the extension on the original's own axes: execution
 time per kernel against problem size, uncached against cached, with our filter
 added as a third bar the original has no counterpart to.
+Table~\ref{tab:exec} gives the cycle counts behind it.
 
-Two of the three reproduce it: matrix multiplication by 38.4 to 44.0\% and
-convolution by 46 to 48\%, against the ${\approx}40\%$ the original reports for
-both. Neither decays with problem size, and that is not luck. What must stay resident is not the data set but the \emph{reuse
-footprint}, the bytes a core revisits before moving on -- one row of $B$ for
-matrix multiplication, $4N$ bytes or 512\,B at $N{=}128$, and the three-row
-sliding window for convolution, $12N$ bytes or 1536\,B. Both fit a 2\,KiB DCU
-throughout, so the benefit does not move.
+Matrix multiplication and convolution reproduce the ${\approx}40\%$ the original
+reports for both, and neither decays with problem size. That is not luck. What
+must stay resident is not the data set but the \emph{reuse footprint}, the bytes
+a core revisits before moving on: one row of $B$, $4N$ bytes, for matrix
+multiplication, and the three-row sliding window, $12N$ bytes, for convolution.
+At the largest size those are 512\,B and 1536\,B, both inside a 2\,KiB DCU, so
+the benefit does not move.
 
 FFT is where that stops holding. The original reports a uniform
-${\approx}23\%$; we match it at $N{=}256$, at 24.8\%, but the benefit falls to
-0.4\% at 512 and turns negative at 1024, where the cache makes the kernel
-\emph{slower} than having none. The footprint argument predicts exactly this:
-FFT revisits $N$ complex points across its stages, $8N$ bytes, which is 2\,KiB
-at $N{=}256$ and 8\,KiB at $N{=}1024$. Only the first fits.
+${\approx}23\%$; we match it at $N{=}256$ and then watch the benefit vanish and
+reverse, until at $N{=}1024$ the cache makes the kernel \emph{slower} than
+having none. The footprint argument predicts exactly this: FFT revisits $N$
+complex points across its stages, $8N$ bytes, which is 2\,KiB at $N{=}256$ and
+8\,KiB at $N{=}1024$. Only the first fits.
 
 That the cause is capacity and not conflict can be shown rather than asserted,
 by moving one variable at a time. At $N{=}512$, doubling associativity at the
 same 2\,KiB recovers 3.8\%; quadrupling capacity at the same associativity
 recovers 24.5\%, and 16\,KiB recovers nothing beyond 8\,KiB. Saturation once the
 footprint fits is the signature of a capacity limit, not a conflict one. Given a
-DCU that holds the footprint, FFT then reproduces the original at every size --
-24.8, 24.8 and 24.5\% at 8\,KiB. At the 2\,KiB its text states, it does not. We
-read that as a configuration discrepancy rather than a contradiction: its result
-implies a cache larger than the one specified, or a smaller working set, and the
-published description does not let a reader tell which.
+DCU that holds the footprint, FFT reproduces the original at every size --
+24.8, 24.8 and 24.5\% at 8\,KiB -- and at the 2\,KiB its text states, it does
+not. We read that as a configuration discrepancy rather than a contradiction:
+its result implies a cache larger than the one specified, or a smaller working
+set, and the published description does not let a reader tell which.
 
-None of it weakens the filter, which is orthogonal: the filter removes coherence
-traffic, not misses. It is worth roughly 50\% throughout on the first two
-kernels, and at $N{=}1024$ it is what carries FFT back from $-4.3\%$ to parity.
+None of it weakens the filter, which is orthogonal: it removes coherence
+traffic, not misses. It is what carries FFT back to parity at $N{=}1024$.
 
 %% The per-kernel speedup table was folded into the paragraph below. Three of
 %% its four rows duplicated bars now in Fig. \ref{fig:exec}; what it uniquely
@@ -414,8 +401,8 @@ Against the unfiltered design the filter is worth $1.222\times$ on matrix
 multiplication, $1.123\times$ on memcpy, $1.089\times$ on convolution and
 $1.061\times$ on FFT: a geometric mean of $1.122\times$. The useful comparison
 is not that mean but an oracle that suppresses every broadcast unconditionally,
-which is sound to simulate only because Table~\ref{tab:invuse} says none are
-needed, and which bounds what any filter could return.
+which is sound to simulate only because none of them are needed, and which
+bounds what any filter could return.
 
 %% fig_result removed to make room for fig_exec, which supersedes it: its panel
 %% (a) plotted what the extension is worth against no cache, which fig_exec now
@@ -583,9 +570,9 @@ kernels, accomplishes nothing: over a million invalidation broadcasts, none of
 which invalidate anything. An exact mirror of the caches' tag arrays lets the
 bus suppress those broadcasts for 1{,}064 LUTs and 516 flip-flops, preserving
 coherence structurally rather than by argument, and is worth a geometric mean
-$1.122\times$ at a fixed 60~MHz clock. It also removes the case in which the
-extension was slower than having no cache at all. The mechanism costs
-frequency, and we report where that matters.
+$1.122\times$ at a fixed 60~MHz clock -- for 66\,ps of slack, which is less than
+this design's run-to-run variation. It also removes the case in which the
+extension was slower than having no cache at all.
 
 \ifanon
 \else

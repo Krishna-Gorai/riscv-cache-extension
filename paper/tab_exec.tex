@@ -1,0 +1,35 @@
+%% The numbers behind Fig. \ref{fig:exec}. Regenerate with
+%%   python scripts/plot_fig6.py --series 3
+%% which prints exactly these rows, from results/fig6.csv.
+%%
+%% Cycles rather than the figure's thousands: the figure carries the shape and
+%% the table has to carry the values, and rounding them here would leave the
+%% paper with no exact statement of its own primary measurement.
+\begin{table}[t]
+\caption{Execution cycles of the slowest processing element, behind
+Fig.~\ref{fig:exec}. The last two columns are the reduction against no data
+cache, for the original design and with the filter added.}
+\label{tab:exec}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+& & \multicolumn{3}{c}{Execution cycles} & \multicolumn{2}{c}{Reduction} \\
+\cmidrule(lr){3-5}\cmidrule(l){6-7}
+Kernel & Size & No cache & Cache & +Filter & Cache & +Filter \\
+\midrule
+matmul & $32^2$  &    277{,}621 &   171{,}142 &   140{,}223 & 38.4\% & 49.5\% \\
+       & $64^2$  &  2{,}191{,}981 & 1{,}337{,}850 & 1{,}094{,}750 & 39.0\% & 50.1\% \\
+       & $128^2$ & 16{,}899{,}384 & 9{,}461{,}615 & 8{,}118{,}893 & \textbf{44.0\%} & \textbf{52.0\%} \\
+\addlinespace
+conv2d & $32^2$  &     73{,}268 &    38{,}120 &    35{,}526 & 48.0\% & 51.5\% \\
+       & $64^2$  &    311{,}454 &   168{,}177 &   154{,}382 & 46.0\% & 50.4\% \\
+       & $128^2$ &  1{,}277{,}966 &   683{,}079 &   625{,}110 & 46.5\% & 51.1\% \\
+\addlinespace
+FFT    & 256     &    113{,}092 &    85{,}093 &    80{,}228 & 24.8\% & 29.1\% \\
+       & 512     &    245{,}292 &   244{,}338 &   225{,}852 &  0.4\% &  7.9\% \\
+       & 1024    &    550{,}489 &   574{,}366 &   541{,}289 & $-4.3\%$ &  1.7\% \\
+\bottomrule
+\end{tabular}
+\end{table}

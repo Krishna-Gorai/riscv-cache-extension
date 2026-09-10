@@ -99,7 +99,7 @@ def main():
     if not panels:
         sys.exit("results/fig6.csv has no complete size for any kernel")
 
-    fig, axes = plt.subplots(1, 3, figsize=(7.16, 2.35))
+    fig, axes = plt.subplots(1, 3, figsize=(7.16, 1.95))
 
     for ax, (kern, title, xlabel, sizes) in zip(axes, panels):
         values = [[data[(kern, s, cfg)] for s in sizes]
