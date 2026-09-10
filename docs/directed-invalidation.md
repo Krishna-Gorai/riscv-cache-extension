@@ -368,48 +368,50 @@ Paper is at 6 pages, DATE's limit, so all of that has to displace something.
 
 ---
 
-## 7. OPEN DECISION (2026-09-10) — date2027 is 7 pages
+## 7. RESOLVED (2026-09-10) — the page limit, from the CFP
 
-`paper/date2027.tex` is currently **seven pages, about eight lines over** DATE's
-six-page limit, at commit `bd7af5c`. **Do not submit this state.**
+The DATE 2027 call for papers settles it:
 
-### How it got here
+> "Submissions must **not exceed 6 pages in length, with one extra page allowed
+> only for bibliographic references**."
 
-A three-panel execution-time figure on the reference's own axes
-(`fig_exec.pdf`), plus the 27-point data table behind it (`tab_exec.tex`). To
-make room, four floats were removed, each commented in the source with what
-replaced it:
+So the earlier panic was misplaced in one direction and not strict enough in the
+other. Seven pages is fine **provided page 7 holds nothing but references** — and
+the paper had been failing that, because the tail of the conclusion was sharing
+page 7 with them.
 
-| Removed | Replaced by | Evidence lost |
-|---|---|---|
-| `tab:stall` | `fig_stall` plots the same numbers | none |
-| `fig_result` | superseded by `fig_exec` (3 sizes vs 1) | none — panel (b) numbers are in the prose |
-| `tab:speedup` | folded into two sentences | none |
-| `tab:invuse` | folded into prose; its result column was all zeros | none |
+Fix: `\newpage` before `\begin{thebibliography}`. That is what the allowance is
+for, and it hands the whole of page 6 back to the body. **Verify with
+`pdftotext -f 7 -l 7 date2027.pdf -` that the first non-blank line is
+`REFERENCES`** — do not judge it by page count alone, which looks identical
+either way.
 
-Prose was then trimmed five separate times and the overflow **did not move**.
-The cause is float and reference-list packing, not text volume: reference [7] is
-a fixed block that either fits on page 6 or does not. Further sentence-level
-cutting is wasted effort.
+### Other CFP facts worth not re-deriving
 
-### The three options
+| | |
+|---|---|
+| Abstract registration | Sunday 13 September 2026, AoE |
+| Full paper | Sunday 20 September 2026, AoE |
+| Notification | Monday 23 November 2026 |
+| Camera-ready | Wednesday 16 December 2026 |
+| Review | **Double-blind** — no names, no acknowledgements |
+| Format | A4/Letter, double column, Times or equivalent, min 10 pt |
+| Type-3 fonts | Forbidden. Checked: all embedded fonts are Type 1 |
+| Preprints | arXiv etc. only **after** notification |
 
-1. **Table into `reproduction.tex` only** (it has room at 5 pages), restore
-   `tab:invuse` in `date2027`, keep the figure and the percentages in prose.
-   Nothing is lost anywhere; the exact values live in the companion paper and in
-   `results/fig6.csv`. **Recommended.**
-2. **Keep the table in `date2027`** and cut roughly eight more lines. The
-   realistic candidate is a paragraph of Threats to Validity.
-3. **Check whether DATE 2027 permits a seventh page.** Many venues allow one
-   over-length page for a fee. If it does, this problem disappears and
-   `fig_result` and `tab:speedup` are worth restoring as well. The policy was
-   not verifiable offline.
+### Two open risks, both the author's call
 
-### Not part of the decision
+1. **The public repo against double-blind.** `github.com/Krishna-Gorai/...`
+   carries the author's name in the URL and both papers as committed PDFs. A
+   reviewer searching a distinctive phrase can find it.
+2. **The preprint clause.** A code repository is not literally a preprint, but
+   the repo contains the manuscripts. Making it private until 23 November
+   removes both risks.
 
-Two edits in `bd7af5c` are corrections and should survive whichever option is
-taken. The abstract and conclusion both claimed the mechanism "costs frequency".
-The matched-batch implementation measured **66 ps** of slack against the
-unfiltered design, below this design's run-to-run place-and-route variation, so
-both now say that. The old wording came from comparing runs weeks apart, which
-is the error section 5.3 documents.
+### What was cut to fit six pages
+
+Four floats, in this order, each commented in the source with its replacement:
+`tab:stall`, `fig_result`, `tab:speedup`, `tab:invuse`, then later `fig_stall`.
+Nothing that was evidence is gone — only restatement. `plot_date.py` still
+generates `fig_result.pdf` and `fig_stall.pdf` if a venue with a looser limit
+wants them back.
