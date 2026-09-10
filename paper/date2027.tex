@@ -114,6 +114,52 @@ Our contributions are:
 \end{itemize}
 
 % =============================================================================
+\section{Related Work}
+% =============================================================================
+
+Filtering snoops is not a new idea, and the value here is not the concept but
+where the filter sits, what it is exact about, and what it is measured against.
+
+JETTY~\cite{jetty} places a small cache-like structure between the bus and each
+processor's L2, filtering snoops that would miss locally so that the energy of a
+tag lookup is not spent. Its target is energy, its position is the receiving
+side, and it is approximate: a small JETTY filters most useless snoops, not all.
+Coarse-grain coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout}
+raise the granularity instead, tracking sharing over regions of hundreds or
+thousands of bytes so that a region known to be unshared needs no broadcast at
+all, trading precision for a much smaller structure.
+
+Our setting inverts the cost that matters. On a snooping bus in a soft
+multi-core, the expense of an unnecessary invalidation is not the energy of the
+remote tag lookups but the \emph{serialisation}: one grant per cycle across the
+cluster, held until every other cache is ready to accept the broadcast. The
+filter therefore belongs at the source, deciding whether to arbitrate at all,
+rather than at each receiver deciding whether to look. And because the design is
+small -- four caches of 128 lines each -- an exact mirror is affordable, at
+1{,}064 LUTs (Section~\ref{sec:eval}), which removes the need to trade precision
+for size and reduces the correctness argument to a sentence. A region-based
+scheme would be the right choice at a scale where an exact mirror is not
+affordable; at this one it is not necessary.
+
+The RISC-V ecosystem offers coherent fabrics at a range of scales:
+TileLink~\cite{tilelink} as a coherent interconnect standard,
+OpenPiton~\cite{openpiton} scaling directory coherence to many cores, and
+CIFER~\cite{cifer} integrating coherent clusters in silicon. These are complete
+memory systems, and adopting one means adopting its interconnect. The design
+studied here occupies a deliberately different point: an extension attached to
+an unmodified core through its existing memory port, which is what makes it
+attractive on an FPGA and also what confines coherence to a single shared bus.
+Our contribution is to that design point, not to coherent fabrics generally.
+
+Finally, the measurement itself has a precedent worth acknowledging. JETTY's
+premise is the observation that many snoops find no copy elsewhere. On the
+benchmark kernels of the design studied here, \emph{no} invalidation finds a
+copy elsewhere -- Section~\ref{sec:measure} establishes that, and it is the
+result the rest of this paper follows from. The difference between "many" and
+"all" is a property of data-parallel workloads on a private-cache cluster, and
+it is what makes an exact filter worth its area here.
+
+% =============================================================================
 \section{The Design Under Study}
 % =============================================================================
 
@@ -159,26 +205,9 @@ between them is attributable to the cache sub-system alone.
 \subsection{The coherence bus is a large fraction of runtime}
 
 The DCU separates a core access into the places it can wait. One of those is
-stage~1 waiting for a snoopy-bus grant. Table~\ref{tab:stall} gives that bucket
+stage~1 waiting for a snoopy-bus grant. Fig.~\ref{fig:stall} gives that bucket
 as a fraction of the cycles a core spent with an access in the DCU at all,
-and Fig.~\ref{fig:stall} plots it.
-
-\begin{table}[t]
-\caption{Time spent waiting for a snoopy-bus grant, as a percentage of cycles
-with an access in the DCU.}
-\label{tab:stall}
-\centering
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Kernel & MemLat 2 & MemLat 8 & MemLat 20 \\
-\midrule
-memcpy (16\,KiB) & 14.3 & 26.1 & \textbf{33.0} \\
-matmul ($64^2$)  & 15.8 & 26.3 & 32.9 \\
-conv2d ($64^2$)  &  6.5 & 11.2 & 19.0 \\
-FFT ($N{=}256$)  &  5.8 &  8.4 & 12.2 \\
-\bottomrule
-\end{tabular}
-\end{table}
+for each kernel at three memory latencies.
 
 \begin{figure}[t]
 \centering
@@ -195,7 +224,7 @@ grows with memory latency, because each grant is held longer.
 
 \subsection{It is not readers waiting on writers}
 
-The obvious reading of Table~\ref{tab:stall} is contention between readers and
+The obvious reading of Fig.~\ref{fig:stall} is contention between readers and
 writers -- the single-writer screening doing its job. We instrumented the bus to
 count it, and across all four kernels a read is \emph{never} withheld: not once.
 Whatever the stall is, it is not the MRSW screening.
@@ -330,43 +359,71 @@ and 3{,}202 LUTs, against 512 and 408 for the structure above.
 
 \subsection{Cycles}
 
-Table~\ref{tab:speedup} and Fig.~\ref{fig:result} give execution time with and
-without the filter, and
-against an oracle that suppresses every broadcast unconditionally -- which is
-sound to simulate only because Table~\ref{tab:invuse} says none of them are
-needed, and which bounds what any filter could return.
-
-\begin{table}[t]
-\caption{Execution cycles of the slowest processing element. The oracle
-suppresses every broadcast and bounds what a filter can achieve.}
-\label{tab:speedup}
-\centering
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Kernel & Baseline & Filtered & Oracle & Speedup \\
-\midrule
-matmul ($64^2$)  & 1{,}337{,}850 & 1{,}094{,}750 & 1{,}094{,}750 & \textbf{1.222} \\
-memcpy (16\,KiB) &      21{,}010 &      18{,}708 &      18{,}708 & 1.123 \\
-conv2d ($64^2$)  &     168{,}177 &     154{,}382 &     154{,}382 & 1.089 \\
-FFT ($N{=}256$)  &      85{,}093 &      80{,}228 &      80{,}228 & 1.061 \\
-\midrule
-\multicolumn{4}{@{}l}{Geometric mean} & \textbf{1.122} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \begin{figure*}[t]
 \centering
-\includegraphics[width=\textwidth]{fig_result.pdf}
-\caption{(a) What the cache extension is worth against having no data cache at
-all, with and without the filter. memcpy begins below parity -- the extension
-costs more than it saves -- and the filter carries it back above. (b) Cycles
-spent waiting on the coherence bus, on a logarithmic scale, which is where the
-speedup in (a) comes from. FFT is the exception: its load-reserved and
-store-conditional traffic still passes the second arbiter, so its stall falls by
-half rather than to nothing.}
-\label{fig:result}
+\includegraphics[width=\textwidth]{fig_exec.pdf}
+\caption{Execution time of the three benchmark kernels against problem size,
+without a data cache, with one, and with the snoop filter of this work. The
+axes are those of the original's own execution-time figure, so the first two
+bars of each cluster are directly comparable with it. Matrix multiplication and
+convolution reproduce the reduction it reports; FFT does not, and the reason is
+capacity rather than coherence -- see the text.}
+\label{fig:exec}
 \end{figure*}
+
+Fig.~\ref{fig:exec} places the extension on the original's own axes: execution
+time per kernel against problem size, uncached against cached, with our filter
+added as a third bar the original has no counterpart to.
+
+Two of the three reproduce it: matrix multiplication by 38.4 to 44.0\% and
+convolution by 46 to 48\%, against the ${\approx}40\%$ the original reports for
+both. Neither decays with problem size, and that is not luck. What must stay resident is not the data set but the \emph{reuse
+footprint}, the bytes a core revisits before moving on -- one row of $B$ for
+matrix multiplication, $4N$ bytes or 512\,B at $N{=}128$, and the three-row
+sliding window for convolution, $12N$ bytes or 1536\,B. Both fit a 2\,KiB DCU
+throughout, so the benefit does not move.
+
+FFT is where that stops holding. The original reports a uniform
+${\approx}23\%$; we match it at $N{=}256$, at 24.8\%, but the benefit falls to
+0.4\% at 512 and turns negative at 1024, where the cache makes the kernel
+\emph{slower} than having none. The footprint argument predicts exactly this:
+FFT revisits $N$ complex points across its stages, $8N$ bytes, which is 2\,KiB
+at $N{=}256$ and 8\,KiB at $N{=}1024$. Only the first fits.
+
+That the cause is capacity and not conflict can be shown rather than asserted,
+by moving one variable at a time. At $N{=}512$, doubling associativity at the
+same 2\,KiB recovers 3.8\%; quadrupling capacity at the same associativity
+recovers 24.5\%, and 16\,KiB recovers nothing beyond 8\,KiB. Saturation once the
+footprint fits is the signature of a capacity limit, not a conflict one. Given a
+DCU that holds the footprint, FFT then reproduces the original at every size --
+24.8, 24.8 and 24.5\% at 8\,KiB. At the 2\,KiB its text states, it does not. We
+read that as a configuration discrepancy rather than a contradiction: its result
+implies a cache larger than the one specified, or a smaller working set, and the
+published description does not let a reader tell which.
+
+None of it weakens the filter, which is orthogonal: the filter removes coherence
+traffic, not misses. It is worth roughly 50\% throughout on the first two
+kernels, and at $N{=}1024$ it is what carries FFT back from $-4.3\%$ to parity.
+
+%% The per-kernel speedup table was folded into the paragraph below. Three of
+%% its four rows duplicated bars now in Fig. \ref{fig:exec}; what it uniquely
+%% carried -- memcpy, and the oracle column -- is two sentences, and the page
+%% limit was worth more than the fourth restatement of the same four numbers.
+
+Against the unfiltered design the filter is worth $1.222\times$ on matrix
+multiplication, $1.123\times$ on memcpy, $1.089\times$ on convolution and
+$1.061\times$ on FFT: a geometric mean of $1.122\times$. The useful comparison
+is not that mean but an oracle that suppresses every broadcast unconditionally,
+which is sound to simulate only because Table~\ref{tab:invuse} says none are
+needed, and which bounds what any filter could return.
+
+%% fig_result removed to make room for fig_exec, which supersedes it: its panel
+%% (a) plotted what the extension is worth against no cache, which fig_exec now
+%% does for three kernels at three sizes rather than one size each. Its panel
+%% (b), the snoop-stall reduction, survives as the numbers in the paragraph
+%% below -- conv2d 20,848 to 109, memcpy 7,168 to 1 -- so no evidence is lost
+%% with it. paper/fig_result.pdf is still generated by scripts/plot_date.py if
+%% a venue with a looser page limit wants it back.
 
 The filter reaches the oracle on every kernel, cycle for cycle. That is what an
 exact structure should do on workloads with no sharing: it suppresses precisely
@@ -479,68 +536,19 @@ and a green test said nothing about it.
 Section~\ref{sec:eval}: neither the register count nor the storage type was the
 cause of the frequency loss.
 
-\textbf{Directed invalidation}, which is the obvious next step and does not pay.
-The mirror knows not merely \emph{whether} another cache holds the line but
-\emph{which} ones do, so the bus can drive the invalidation into exactly those
-caches and hold the grant on only those: an exact multicast with a partial
-barrier. Only an exact filter may do this -- a conservative one may over-claim
-sharers safely under suppression, but under multicast a missing sharer bit loses
-an invalidation instead of costing a redundant broadcast. We built it and
-measured it on a halo-exchange stencil, a Jacobi 5-point kernel split into row
-bands so that each band boundary is written by one PE and read by its
-neighbour, giving a sharer set of exactly one of the three other caches. It
-behaves perfectly: 168 invalidations delivered, all 168 useful, against
-suppression's 504, and the residual snoop stall falls elevenfold. It is also
-worth 0.1--0.3\%, at every memory latency we tried. Exact suppression has
-already removed the traffic that was causing the serialisation, and what is left
-is irreducible -- somebody really does have to be told, and the writer really
-does have to wait for them. Once the filter is exact, the residue is not worth
-steering.
-
-% =============================================================================
-\section{Related Work}
-% =============================================================================
-
-Filtering snoops is not a new idea, and the value here is not the concept but
-where the filter sits, what it is exact about, and what it is measured against.
-
-JETTY~\cite{jetty} places a small cache-like structure between the bus and each
-processor's L2, filtering snoops that would miss locally so that the energy of a
-tag lookup is not spent. Its target is energy, its position is the receiving
-side, and it is approximate: a small JETTY filters most useless snoops, not all.
-Coarse-grain coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout}
-raise the granularity instead, tracking sharing over regions of hundreds or
-thousands of bytes so that a region known to be unshared needs no broadcast at
-all, trading precision for a much smaller structure.
-
-Our setting inverts the cost that matters. On a snooping bus in a soft
-multi-core, the expense of an unnecessary invalidation is not the energy of the
-remote tag lookups but the \emph{serialisation}: one grant per cycle across the
-cluster, held until every other cache is ready to accept the broadcast. The
-filter therefore belongs at the source, deciding whether to arbitrate at all,
-rather than at each receiver deciding whether to look. And because the design is
-small -- four caches of 128 lines -- an exact mirror costs 1{,}064 LUTs, which
-removes the need to trade precision for size and reduces the correctness
-argument to a sentence. A region-based scheme would be the right choice at a
-scale where an exact mirror is not affordable; at this one it is not necessary.
-
-The RISC-V ecosystem offers coherent fabrics at a range of scales:
-TileLink~\cite{tilelink} as a coherent interconnect standard,
-OpenPiton~\cite{openpiton} scaling directory coherence to many cores, and
-CIFER~\cite{cifer} integrating coherent clusters in silicon. These are complete
-memory systems, and adopting one means adopting its interconnect. The design
-studied here occupies a deliberately different point: an extension attached to
-an unmodified core through its existing memory port, which is what makes it
-attractive on an FPGA and also what confines coherence to a single shared bus.
-Our contribution is to that design point rather than to coherent fabrics
-generally.
-
-Finally, the measurement itself has a precedent worth acknowledging. JETTY's
-premise is the observation that many snoops find no copy elsewhere; we find that
-on the benchmark kernels of the design we study, \emph{no} invalidation finds a
-copy elsewhere. The difference between "many" and "all" is a property of
-data-parallel workloads on a private-cache cluster, and it is what makes an
-exact filter worth its area here.
+\textbf{Directed invalidation}, the obvious next step, which does not pay. The
+mirror knows not merely \emph{whether} another cache holds the line but
+\emph{which} ones do, so the bus can invalidate exactly those and hold the grant
+on only those: an exact multicast with a partial barrier. Only an exact filter
+may do this, since under multicast a missing sharer bit loses an invalidation
+rather than costing a redundant broadcast. Measured on a halo-exchange stencil
+whose band boundaries give a sharer set of exactly one of three, it behaves
+perfectly -- 168 invalidations delivered, all 168 useful, against suppression's
+504, with the residual stall down elevenfold -- and is worth 0.1 to 0.3\% at
+every memory latency tried. Exact suppression has already removed the traffic
+that caused the serialisation, and the remainder is irreducible: somebody does
+have to be told, and the writer does have to wait. Once the filter is exact, the
+residue is not worth steering.
 
 % =============================================================================
 \section{Threats to Validity}
@@ -562,9 +570,8 @@ resource and timing figures; no bitstream has been run on hardware. The original
 targets a Virtex UltraScale+ XCVU9P and this work an XCZU7EV, so absolute
 figures are directional rather than a like-for-like comparison.
 
-Power is not reported. Vivado's vectorless estimate models this design as idle
-because it cannot evaluate the cores' clock-gate enables, and a
-switching-activity-based estimate is not yet complete.
+Power is not reported: Vivado's vectorless estimate models this design as idle,
+because it cannot evaluate the cores' clock-gate enables.
 
 % =============================================================================
 \section{Conclusion}
