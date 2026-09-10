@@ -365,3 +365,51 @@ Paper is at 6 pages, DATE's limit, so all of that has to displace something.
 | `sw/soc_kernels/bench_stencil.c` | new |
 | `scripts/bench_golden.py` | `bench_stencil` model, `STENCIL_N` / `STENCIL_T` |
 | `sw/build_bench.sh` | `stencil` case |
+
+---
+
+## 7. OPEN DECISION (2026-09-10) — date2027 is 7 pages
+
+`paper/date2027.tex` is currently **seven pages, about eight lines over** DATE's
+six-page limit, at commit `bd7af5c`. **Do not submit this state.**
+
+### How it got here
+
+A three-panel execution-time figure on the reference's own axes
+(`fig_exec.pdf`), plus the 27-point data table behind it (`tab_exec.tex`). To
+make room, four floats were removed, each commented in the source with what
+replaced it:
+
+| Removed | Replaced by | Evidence lost |
+|---|---|---|
+| `tab:stall` | `fig_stall` plots the same numbers | none |
+| `fig_result` | superseded by `fig_exec` (3 sizes vs 1) | none — panel (b) numbers are in the prose |
+| `tab:speedup` | folded into two sentences | none |
+| `tab:invuse` | folded into prose; its result column was all zeros | none |
+
+Prose was then trimmed five separate times and the overflow **did not move**.
+The cause is float and reference-list packing, not text volume: reference [7] is
+a fixed block that either fits on page 6 or does not. Further sentence-level
+cutting is wasted effort.
+
+### The three options
+
+1. **Table into `reproduction.tex` only** (it has room at 5 pages), restore
+   `tab:invuse` in `date2027`, keep the figure and the percentages in prose.
+   Nothing is lost anywhere; the exact values live in the companion paper and in
+   `results/fig6.csv`. **Recommended.**
+2. **Keep the table in `date2027`** and cut roughly eight more lines. The
+   realistic candidate is a paragraph of Threats to Validity.
+3. **Check whether DATE 2027 permits a seventh page.** Many venues allow one
+   over-length page for a fee. If it does, this problem disappears and
+   `fig_result` and `tab:speedup` are worth restoring as well. The policy was
+   not verifiable offline.
+
+### Not part of the decision
+
+Two edits in `bd7af5c` are corrections and should survive whichever option is
+taken. The abstract and conclusion both claimed the mechanism "costs frequency".
+The matched-batch implementation measured **66 ps** of slack against the
+unfiltered design, below this design's run-to-run place-and-route variation, so
+both now say that. The old wording came from comparing runs weeks apart, which
+is the error section 5.3 documents.
