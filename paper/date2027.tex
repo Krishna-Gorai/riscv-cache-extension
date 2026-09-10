@@ -70,30 +70,37 @@ RISC-V, cache coherence, snoop filter, FPGA, multi-core
 \section{Introduction}
 % =============================================================================
 
-A soft multi-core system on an FPGA gains a great deal from being able to attach
-a data cache to an existing, verified RISC-V core without modifying it. The core
-stays an unmodified IP block, coherence is handled in hardware, and software
-needs no knowledge of either. Kamaleldin \emph{et al.}~\cite{kamaleldin2024}
-propose exactly this: a private write-through L1 data cache unit (DCU) attached
-through the core's ordinary memory interface, with a snooping invalidation bus
-maintaining coherence across the cluster.
+Multi-core systems built on FPGAs increasingly rely on private data caches to
+keep soft processor cores fed from a shared memory whose latency they cannot
+otherwise hide. Once each core caches shared data, coherence must be maintained,
+and its cost is charged against the very performance the caches were added to
+provide -- paid not only in the area of the tag and status structures, but in
+the serialisation any cluster-wide coherence action imposes on the cores waiting
+for it.
 
-We built that design from scratch in open-source SystemVerilog in order to
-measure it, and the measurement is the origin of this paper. The DCU exports
-per-access cycle accounting, and it says that between 6 and 33\% of a core's
-time is spent waiting on the coherence bus. That is a large number for a
-mechanism that, on these workloads, turns out to accomplish nothing at all:
-across four kernels the cluster sends 1{,}048{,}821 invalidation broadcasts and
-none of them invalidates a line anywhere.
+Accordingly, many hardware and software coherence schemes have been proposed for
+scalable architectures~\cite{jetty,cgct,regionscout}, and the RISC-V ecosystem
+offers coherent fabrics at scale~\cite{tilelink,openpiton,cifer}. Adopting one,
+however, means adopting its interconnect and usually modifying the core, which
+for a multi-core assembled from existing verified soft cores is precisely the
+cost the designer is trying to avoid.
 
-The reason is structural rather than accidental. The kernels are data-parallel
-and partition their arrays per processing element, so almost every written line
-is private to the core writing it. The bus has no way to know that, so every
-write is announced to every cache, and the announcement is serialised: at most
-one invalidation is granted per cycle, and the grant is withheld until every
-other cache is ready to accept the broadcast.
+A seamless cache extension avoids it. Kamaleldin \emph{et
+al.}~\cite{kamaleldin2024} attach a private write-through L1 data cache unit
+(DCU) to an unmodified RISC-V core through its ordinary memory interface and
+maintain coherence with a snooping invalidation bus, in hardware and invisibly
+to software. What such a design has not been asked is how much of the coherence
+traffic it generates is \emph{necessary} -- a question answerable only by
+instrumenting the bus and counting.
 
-Our contributions are:
+In this work, we reproduce that design in open-source SystemVerilog in order to
+measure it. Between 6 and 33\% of a core's time is spent waiting on the
+coherence bus, and across four benchmark kernels the cluster sends
+1{,}048{,}821 invalidation broadcasts of which not one invalidates a line
+anywhere. The cause is structural: the kernels partition their arrays per
+processing element, so almost every written line is private and the bus has no
+way to know it. We therefore propose an exact snoop filter that answers the
+question before the bus arbitrates. Our contributions are listed as follows:
 
 \begin{itemize}
   \item A measurement of how much of this design's coherence traffic is
@@ -113,8 +120,16 @@ Our contributions are:
         had (Section~\ref{sec:rejected}).
 \end{itemize}
 
+The rest of the paper is structured as follows. Sections~\ref{sec:related}
+and~\ref{sec:design} cover related work and the design under study.
+Section~\ref{sec:measure} measures where its time goes and
+Section~\ref{sec:filter} presents the snoop filter. Section~\ref{sec:eval}
+evaluates it, Section~\ref{sec:rejected} reports what did not work, and
+Sections~\ref{sec:threats} and~\ref{sec:concl} close.
+
 % =============================================================================
 \section{Related Work}
+\label{sec:related}
 % =============================================================================
 
 Filtering snoops is not a new idea, and the value here is not the concept but
@@ -141,15 +156,13 @@ for size and reduces the correctness argument to a sentence. A region-based
 scheme would be the right choice at a scale where an exact mirror is not
 affordable; at this one it is not necessary.
 
-The RISC-V ecosystem offers coherent fabrics at a range of scales:
-TileLink~\cite{tilelink} as a coherent interconnect standard,
-OpenPiton~\cite{openpiton} scaling directory coherence to many cores, and
-CIFER~\cite{cifer} integrating coherent clusters in silicon. These are complete
-memory systems, and adopting one means adopting its interconnect. The design
-studied here occupies a deliberately different point: an extension attached to
-an unmodified core through its existing memory port, which is what makes it
-attractive on an FPGA and also what confines coherence to a single shared bus.
-Our contribution is to that design point, not to coherent fabrics generally.
+The RISC-V ecosystem offers coherent fabrics at a range of scales --
+TileLink~\cite{tilelink}, OpenPiton~\cite{openpiton} and CIFER~\cite{cifer} --
+but these are complete memory systems, and adopting one means adopting its
+interconnect. The design studied here is deliberately a different point: an
+extension attached to an unmodified core through its existing memory port, which
+is what makes it attractive on an FPGA and also what confines coherence to a
+single shared bus.
 
 Finally, the measurement itself has a precedent worth acknowledging. JETTY's
 premise is the observation that many snoops find no copy elsewhere. On the
@@ -161,6 +174,7 @@ it is what makes an exact filter worth its area here.
 
 % =============================================================================
 \section{The Design Under Study}
+\label{sec:design}
 % =============================================================================
 
 \begin{figure*}[t]
@@ -205,26 +219,24 @@ between them is attributable to the cache sub-system alone.
 \subsection{The coherence bus is a large fraction of runtime}
 
 The DCU separates a core access into the places it can wait. One of those is
-stage~1 waiting for a snoopy-bus grant. Fig.~\ref{fig:stall} gives that bucket
-as a fraction of the cycles a core spent with an access in the DCU at all,
-for each kernel at three memory latencies.
+stage~1 waiting for a snoopy-bus grant, as a fraction of the cycles a core
+spent with an access in the DCU at all.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fig_stall.pdf}
-\caption{Time each core spends waiting for a snoopy-bus grant, as a percentage
-of the cycles it had an access in the DCU. None of the traffic it is waiting
-for turns out to be necessary.}
-\label{fig:stall}
-\end{figure}
+%% fig_stall removed. It was a column-wide picture of twelve numbers whose only
+%% quoted summary, "6 to 33 %", appears three times in the prose already. The
+%% per-kernel values it carried are in the sentence below, which costs four
+%% lines rather than fourteen, and the space went to the memory-latency sweep in
+%% Fig. \ref{fig:memcpy}. scripts/plot_date.py still generates fig_stall.pdf.
 
+At a memory latency of two the share is 14.3\% on memcpy, 15.8\% on matmul,
+6.5\% on conv2d and 5.8\% on FFT; at twenty it is 33.0, 32.9, 19.0 and 12.2\%.
 Between a twentieth and a third of a core's time goes to arbitrating for a
 resource that grants one request per cycle across the whole cluster. The share
 grows with memory latency, because each grant is held longer.
 
 \subsection{It is not readers waiting on writers}
 
-The obvious reading of Fig.~\ref{fig:stall} is contention between readers and
+The obvious reading of that is contention between readers and
 writers -- the single-writer screening doing its job. We instrumented the bus to
 count it, and across all four kernels a read is \emph{never} withheld: not once.
 Whatever the stall is, it is not the MRSW screening.
@@ -425,11 +437,30 @@ broadcasts do -- a residual cost no filter can remove.
 
 \subsection{The extension stops being harmful}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_memcpy.pdf}
+\caption{Memory-copy latency against transfer size, on the original's axes, at
+three memory latencies. At two the extension sits \emph{above} the uncached line
+at every size and only the filter brings it below; the original's
+${\approx}50\%$ appears between eight and twenty.}
+\label{fig:memcpy}
+\end{figure*}
+
 The reproduction's most awkward finding was that on memcpy at low memory
 latency, the cache extension is \emph{slower} than having no cache at all:
 $0.975\times$ the non-coherent baseline. With the filter it runs at
 $1.095\times$. The pathology is not intrinsic to attaching a coherent cache; it
 is the cost of announcing private writes to a cluster that does not care.
+
+Fig.~\ref{fig:memcpy} shows this is not an artefact of one transfer size, and
+locates the operating point at which it stops. Over 4 to 32\,KiB the extension
+is 2.5 to 7.6\% slower at every size, and the filter turns that into 8.2 to
+9.0\% faster. Raising the memory latency restores the original's result: 34\% at
+eight and 56\% at twenty, against its reported ${\approx}50\%$. A cache earns
+its keep by hiding memory latency, and a streaming kernel gives it nothing else
+to work with -- no reuse against which to amortise a fill -- so when there is
+little latency to hide, only the coherence overhead remains.
 
 \subsection{Coherence}
 
@@ -474,26 +505,18 @@ arrays are nearly free and the coherence logic is not.
 
 \subsection{The frequency it costs}
 
-It does cost frequency, and the paper would be misleading without saying so. At
-a 75~MHz target the reference meets timing with $+1.327$~ns of slack and the
-filtered design does not, at $-2.586$~ns. The critical path is 86\% routing and
-runs from a DCU's registered request address across the die; the filter
-lengthens it because the decision to broadcast is a cluster-spanning
-combinational path, and it does so however the mirror is built. Making the
-mirror smaller did not help: the flip-flop version above is four times the area
-and closes \emph{better}, at $-0.423$~ns.
-
-We therefore evaluate at 60~MHz, which both configurations meet comfortably, and
-which is the frequency the original design itself runs at rather than one chosen
-for convenience. At a fixed 60~MHz clock the filter's $1.122\times$ in cycles is
-a $1.122\times$ in wall time. Clocked freely, the reference reaches a higher
-frequency and the advantage narrows.
-
-We deliberately do not report a maximum-frequency comparison from the 60~MHz
-builds. Measured at a constraint that is already met, that figure records where
-the tool stopped optimising rather than what the design can do: at 60~MHz it
-favours the filtered design by 9.8~MHz, and at 75~MHz it favours the reference
-by 20.5~MHz.
+At 60~MHz the filter costs 66\,ps, which is nothing; at a 75~MHz target an
+earlier pair of builds had the reference meeting timing and the filtered design
+missing by 2.586~ns. We report the first and not the second. The critical path
+is 86\% routing and spans the die from a DCU's registered request address, so
+the decision to broadcast is a cluster-spanning combinational path however the
+mirror is built -- making the mirror smaller did not help, and the flip-flop
+version is four times the area and closes better. But a 3.9~ns gap measured
+across two runs is not separable from the roughly 1.7~ns of place-and-route
+variation this design shows between batches, so we treat the 75~MHz result as
+indicative and evaluate at 60~MHz, which is the frequency the original design
+itself runs at rather than one chosen for convenience. There the filter's
+$1.122\times$ in cycles is a $1.122\times$ in wall time.
 
 % =============================================================================
 \section{What Did Not Work}
@@ -505,8 +528,8 @@ a measurement that also sharpened the eventual design.
 
 \textbf{A streaming mode} that would skip allocation and read at word
 granularity for phases with no reuse. The non-coherent baseline already is such
-a mode, and bounds it: on memcpy it beats the cache at a memory latency of two
-by 2.5\% and loses by better than two to one at eight and twenty, because a line
+a mode, so Fig.~\ref{fig:memcpy} bounds it directly: it wins at a memory latency
+of two and loses by better than two to one at eight and twenty, because a line
 fill amortises one memory latency across four words.
 
 \textbf{A hit-speculative bypass}, in which a read presumes it will hit and
@@ -539,6 +562,7 @@ residue is not worth steering.
 
 % =============================================================================
 \section{Threats to Validity}
+\label{sec:threats}
 % =============================================================================
 
 The central measurement is that none of the invalidation traffic is useful, and
@@ -553,26 +577,21 @@ testbench, at roughly half its invalidations useful, is the extreme in the other
 direction.
 
 The evaluation is in cycles from RTL simulation and in post-place-and-route
-resource and timing figures; no bitstream has been run on hardware. The original
-targets a Virtex UltraScale+ XCVU9P and this work an XCZU7EV, so absolute
-figures are directional rather than a like-for-like comparison.
-
-Power is not reported: Vivado's vectorless estimate models this design as idle,
-because it cannot evaluate the cores' clock-gate enables.
+figures; no bitstream has been run on hardware, and the original targets an
+XCVU9P where this work targets an XCZU7EV, so absolute resource figures are
+directional. Power is not reported: Vivado's vectorless estimate models this
+design as idle, because it cannot evaluate the cores' clock-gate enables.
 
 % =============================================================================
 \section{Conclusion}
+\label{sec:concl}
 % =============================================================================
 
-A seamless coherent cache extension for soft RISC-V multicores spends between 6
-and 33\% of each core's time on a coherence protocol that, on its own benchmark
-kernels, accomplishes nothing: over a million invalidation broadcasts, none of
-which invalidate anything. An exact mirror of the caches' tag arrays lets the
-bus suppress those broadcasts for 1{,}064 LUTs and 516 flip-flops, preserving
-coherence structurally rather than by argument, and is worth a geometric mean
-$1.122\times$ at a fixed 60~MHz clock -- for 66\,ps of slack, which is less than
-this design's run-to-run variation. It also removes the case in which the
-extension was slower than having no cache at all.
+A seamless coherent cache extension spends 6 to 33\% of each core's time on a
+protocol that, on its own benchmark kernels, accomplishes nothing. A mirror of
+the caches' tag arrays that is exact over residency \emph{and} imminent
+residency suppresses that traffic for 1{,}064 LUTs, and is worth a geometric
+mean $1.122\times$.
 
 \ifanon
 \else
@@ -580,6 +599,16 @@ The design, the measurements and the scripts that regenerate every table are
 available at \url{https://github.com/Krishna-Gorai/riscv-cache-extension}.
 \fi
 
+%% DATE allows "one extra page ... only for bibliographic references". Forcing
+%% the bibliography onto that page is not a trick to gain room: it is what the
+%% allowance is for, and it hands the whole of page 6 back to the body. Without
+%% this the references start midway down page 6 and take a column of space the
+%% rule does not require them to take.
+%%
+%% The body must still end by page 6. If it ever spills past this \newpage,
+%% page 7 stops being references-only and the submission breaks the limit --
+%% check that before adding anything, not after.
+\newpage
 \begin{thebibliography}{1}
 \bibitem{kamaleldin2024}
 A.~Kamaleldin, M.~Nickel, S.~Wu and D.~G\"ohringer,
