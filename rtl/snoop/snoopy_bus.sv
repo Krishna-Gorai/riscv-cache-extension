@@ -484,7 +484,16 @@ module snoopy_bus
       dbg_fill_saved  <= 0;
     end else if (inv_gnt_valid && bcast_needed) begin
       dbg_inv_granted <= dbg_inv_granted + 1;
-      if (!(|held_masked)) dbg_fill_saved <= dbg_fill_saved + 1;
+      if (!(|held_masked)) begin
+        dbg_fill_saved <= dbg_fill_saved + 1;
+        // Announce it, with the time and the address. This case is what makes
+        // the filter correct rather than merely fast, and it is rare -- of the
+        // order of one in two hundred granted invalidations -- so a waveform
+        // showing it is worth being able to jump straight to instead of
+        // hunting for. Simulation only, like the counters it sits with.
+        $display("  FILLRACE t=%0t core%0d addr=%08x -> broadcast kept alive by a fill in flight (mirror said nobody holds it)",
+                 $time, inv_arb_idx, win_addr);
+      end
     end
   end
 
@@ -492,6 +501,31 @@ module snoopy_bus
     $display(" FILLRACE granted=%0d saved_by_fill_term=%0d",
              dbg_inv_granted, dbg_fill_saved);
   end
+
+`ifdef FILTER_TRACE
+  // ---------------------------------------------------------------------------
+  //  One line per arbitration outcome, for finding somewhere to look in a
+  //  waveform. Off by default: on a benchmark kernel this is a million lines.
+  //
+  //  SUPPRESS is the speedup -- granted with no broadcast and no barrier.
+  //  BCAST    is the cost that remains -- the grant waits for the sharers.
+  //  WAIT     is a writer holding the arbiter while the sharers catch up.
+  // ---------------------------------------------------------------------------
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && inv_arb_valid) begin
+      if (inv_gnt_valid && !bcast_needed) begin
+        $display("TRACE %0t SUPPRESS core%0d addr=%08x held=%04b fill=%04b",
+                 $time, inv_arb_idx, win_addr, held_masked, filling_line);
+      end else if (inv_gnt_valid && bcast_needed) begin
+        $display("TRACE %0t BCAST    core%0d addr=%08x held=%04b fill=%04b tgt=%04b",
+                 $time, inv_arb_idx, win_addr, held_masked, filling_line, bcast_tgt);
+      end else begin
+        $display("TRACE %0t WAIT     core%0d addr=%08x tgt=%04b ready=%04b",
+                 $time, inv_arb_idx, win_addr, bcast_tgt, inv_ready_i);
+      end
+    end
+  end
+`endif
 `endif
 
   // ---------------------------------------------------------------------------
