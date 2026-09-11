@@ -1,0 +1,120 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version      : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date              : Fri Sep 11 10:23:10 2026
+| Host              : Krishna_NITjsr running 64-bit major release  (build 9200)
+| Command           : report_timing -sort_by group -max_paths 20 -path_type summary -file C:/work/riscv-cache-extension/fpga/reports_prj_filtered/post_route_paths.rpt
+| Design            : fpga_top
+| Device            : xczu7ev-ffvc1156
+| Speed File        : -2  PRODUCTION 1.30 05-15-2022
+| Design State      : Routed
+| Temperature Grade : E
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Startpoint                     Endpoint                       Slack(ns)     
+----------------------------------------------------------------------------
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][30]/CE
+                                                              1.199         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][28]/CE
+                                                              1.200         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][12]/CE
+                                                              1.202         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][4]/CE
+                                                              1.202         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][29]/CE
+                                                              1.236         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][27]/CE
+                                                              1.238         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[2].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][31]/CE
+                                                              1.238         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][4]/CE
+                                                              1.245         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][8]/CE
+                                                              1.245         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][14]/CE
+                                                              1.247         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][5]/CE
+                                                              1.247         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][10]/CE
+                                                              1.262         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][9]/CE
+                                                              1.262         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][11]/CE
+                                                              1.305         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][16]/CE
+                                                              1.315         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][0]/CE
+                                                              1.316         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][20]/CE
+                                                              1.319         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][19]/CE
+                                                              1.321         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[0][21]/CE
+                                                              1.321         
+u_soc/g_dcache.u_dcache/g_dcu[0].u_dcu/s2_addr_q_reg[4]/C
+                               u_soc/g_pe[1].u_pe/u_core/core_i/if_stage_i/prefetch_buffer_i/fifo_i/mem_q_reg[1][0]/CE
+                                                              1.322         
+rst_n_q_reg_rep__15/C          u_soc/g_pe[0].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[16].mem_reg[16][12]/CLR
+                                                              10.462        
+rst_n_q_reg_rep__15/C          u_soc/g_pe[0].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[16].mem_reg[16][22]/CLR
+                                                              10.462        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][22]/CLR
+                                                              10.677        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][5]/CLR
+                                                              10.677        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[13]/CLR
+                                                              10.690        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[23]/CLR
+                                                              10.690        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[35]/CLR
+                                                              10.690        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[45]/CLR
+                                                              10.690        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[33]/CLR
+                                                              10.701        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][8]/CLR
+                                                              10.789        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[17].mem_reg[17][8]/CLR
+                                                              10.789        
+rst_n_q_reg_rep__15/C          u_soc/g_pe[1].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[18].mem_reg[18][12]/CLR
+                                                              10.822        
+rst_n_q_reg_rep__15/C          u_soc/g_pe[1].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[18].mem_reg[18][14]/CLR
+                                                              10.822        
+rst_n_q_reg_rep__15/C          u_soc/g_pe[1].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[18].mem_reg[18][17]/CLR
+                                                              10.822        
+rst_n_q_reg_rep__15/C          u_soc/g_pe[1].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[18].mem_reg[18][22]/CLR
+                                                              10.822        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][0]/CLR
+                                                              10.833        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][10]/CLR
+                                                              10.833        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][15]/CLR
+                                                              10.833        
+rst_n_q_reg_rep__25/C          u_soc/g_pe[2].u_pe/u_core/core_i/id_stage_i/register_file_i/gen_rf[15].mem_reg[15][21]/CLR
+                                                              10.833        
+rst_n_q_reg_rep__65/C          u_soc/g_pe[2].u_axi_dcu/r_line_q_reg[21]/CLR
+                                                              10.854        
+
+
+

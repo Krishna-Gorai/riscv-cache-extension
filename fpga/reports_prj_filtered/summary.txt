@@ -1,0 +1,11 @@
+variant        filtered (project mode)
+project        C:/work/riscv-cache-extension/fpga/vivado_prj_filtered/filtered.xpr
+synth strategy Vivado Synthesis Defaults
+impl strategy  Vivado Implementation Defaults
+clk_period_ns  16.667
+clk_freq_mhz   60.00
+wns_ns         1.199
+whs_ns         0.010
+fmax_mhz       64.65
+
+Not comparable with fpga/reports_filtered/: different strategies.

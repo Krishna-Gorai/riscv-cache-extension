@@ -20,8 +20,8 @@ set root [file normalize [file join [file dirname [info script]] ..]]
 
 set variant [lindex $argv 0]
 if {$variant eq ""} { set variant "coherent" }
-if {$variant ni {coherent baseline}} {
-  error "variant must be 'coherent' or 'baseline', got '$variant'"
+if {$variant ni {coherent baseline filtered directed}} {
+  error "variant must be coherent, baseline, filtered or directed, got '$variant'"
 }
 
 set xpr    [file join $root fpga vivado_prj_$variant $variant.xpr]

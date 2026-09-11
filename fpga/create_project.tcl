@@ -1,8 +1,16 @@
 # =============================================================================
 #  create_project.tcl -- build a managed Vivado project for the GUI.
 #
-#  Usage:  vivado -mode batch -source fpga/create_project.tcl -tclargs coherent
-#          vivado -mode batch -source fpga/create_project.tcl -tclargs baseline
+#  Usage:  vivado -mode batch -source fpga/create_project.tcl -tclargs <variant> [period_ns] [program.hex]
+#
+#  variant: coherent | baseline | filtered | directed
+#    coherent  the published design
+#    baseline  no data cache
+#    filtered  coherent + the exact snoop filter        <- the paper's design
+#    directed  filtered + directed invalidation
+#
+#  The paper evaluates at 60 MHz, which is period 16.667:
+#      ... -tclargs filtered 16.667 sw/build/soc_bench_matmul_64.hex
 #
 #  then open fpga/vivado_prj_<variant>/<variant>.xpr
 #
@@ -25,10 +33,18 @@ set program [lindex $argv 2]
 if {$variant eq ""} { set variant "coherent" }
 if {$period  eq ""} { set period  10.0 }
 
+# Kept in step with run_impl.tcl, which is the flow the paper's numbers come
+# from. This script exists for the GUI: browsing the elaborated design, the
+# schematic, the implemented device view and the timing paths. If the two ever
+# disagree about what a variant means, run_impl.tcl is the one to trust.
+set filt   0
+set dirinv 0
 switch -- $variant {
   coherent { set coh 1 }
   baseline { set coh 0 }
-  default  { error "variant must be 'coherent' or 'baseline', got '$variant'" }
+  filtered { set coh 1 ; set filt 1 }
+  directed { set coh 1 ; set filt 1 ; set dirinv 1 }
+  default  { error "variant must be coherent, baseline, filtered or directed, got '$variant'" }
 }
 
 # 300 MHz board clock / ClkDiv, the same integer divide run_impl.tcl uses.
@@ -109,7 +125,8 @@ set_property include_dirs [list [file join $cv_rtl include]] [get_filesets sourc
 
 # The cache extension is one parameter, and SYNTHESIS swaps the behavioural
 # clock gate for the BUFGCE cell.
-set_property generic [list Coherent=$coh ClkDiv=$clkdiv ProgramHex=$program] [get_filesets sources_1]
+set_property generic [list Coherent=$coh ClkDiv=$clkdiv ProgramHex=$program \
+                           SnoopFilter=$filt DirectedInv=$dirinv] [get_filesets sources_1]
 set_property verilog_define {SYNTHESIS} [get_filesets sources_1]
 
 # Tool defaults, deliberately. Flow_PerfOptimized_high was tried and measured
@@ -124,7 +141,7 @@ update_compile_order -fileset sources_1
 puts ""
 puts "=============================================================="
 puts " project  : [file join $prjdir $variant.xpr]"
-puts " variant  : $variant  (Coherent=$coh)"
+puts " variant  : $variant  (Coherent=$coh SnoopFilter=$filt DirectedInv=$dirinv)"
 puts " part     : $part"
 puts " top      : fpga_top   ClkDiv=$clkdiv -> [format %.3f $actual_period] ns ([format %.2f $actual_freq] MHz)"
 puts ""

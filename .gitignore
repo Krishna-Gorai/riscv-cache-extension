@@ -81,3 +81,7 @@ sweep_*.log
 # one rule covers every run directory and supersedes the enumerated sim/out_*
 # entries above, which were added one at a time as sweeps were written.
 sim/*/
+
+# Start-Process writes stderr to a sibling of the stdout redirect, and *.log
+# above does not cover the .err suffix. These are transient run logs.
+*.log.err
