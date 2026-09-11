@@ -120,6 +120,47 @@ set_property file_type SystemVerilog [get_files -of [get_filesets sources_1] *.s
 
 add_files -norecurse -fileset constrs_1 [file join $root fpga zcu104.xdc]
 
+# -----------------------------------------------------------------------------
+#  Simulation fileset.
+#
+#  Without this, sim_1 is empty and the GUI's "Run Simulation" has no top to
+#  elaborate, which surfaces as "failed due to previous errors" rather than as
+#  anything that names the real problem.
+#
+#  tb_fpga_top boots the design from its own memory -- no backdoor load -- so it
+#  works unchanged on RTL and on a routed netlist. The difference is that in a
+#  netlist the control registers have been flattened and renamed, so the probes
+#  have to reach mangled names like \done_o_reg[3] .Q; the testbench selects
+#  those under `ifdef NETLIST.
+#
+#  That define is set here for the whole fileset, which makes this project's
+#  sim_1 configured for POST-SYNTHESIS and POST-IMPLEMENTATION runs. Behavioural
+#  simulation from this project would need the define removed, and is better run
+#  through sim/run_xsim.ps1 anyway, which is what the rest of the flow uses.
+# -----------------------------------------------------------------------------
+add_files -norecurse -fileset sim_1 [file join $root tb system tb_fpga_top.sv]
+set_property file_type SystemVerilog [get_files -of [get_filesets sim_1] *.sv]
+set_property top tb_fpga_top [get_filesets sim_1]
+set_property top_lib xil_defaultlib [get_filesets sim_1]
+
+# -d NETLIST for the gate-level probes; glbl is what drives GSR, and a
+# gate-level design stays in reset without it.
+#   `ifdef is a PREPROCESSOR directive, so the define has to reach xvlog. Set
+#   only on xelab it does nothing useful: the testbench compiles its RTL-path
+#   branch, whose hierarchical names do not exist in a routed netlist, and the
+#   run dies at elaboration instead. Both steps get it -- xelab harmlessly, and
+#   xvlog because that is the one that matters.
+set_property -name {xsim.compile.xvlog.more_options} -value {-d NETLIST} \
+             -objects [get_filesets sim_1]
+set_property -name {xsim.elaborate.xelab.more_options} -value {-d NETLIST} \
+             -objects [get_filesets sim_1]
+set_property -name {xsim.elaborate.load_glbl} -value {true} \
+             -objects [get_filesets sim_1]
+# The testbench ends with $finish; without this the GUI stops at 1000 ns, long
+# before the four PEs have booted, and reports nothing useful.
+set_property -name {xsim.simulate.runtime} -value {all} \
+             -objects [get_filesets sim_1]
+
 set_property top fpga_top [get_filesets sources_1]
 set_property include_dirs [list [file join $cv_rtl include]] [get_filesets sources_1]
 
