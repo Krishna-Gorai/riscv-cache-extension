@@ -16,13 +16,12 @@
 %% tool's own figures sit below the rule instead, where they are plainly a
 %% separate statement.
 \begin{table}[t]
-\caption{Post-implementation resources, XCZU7EV at 60\,MHz, filtered build.
-Sub-rows may sum slightly above their parent, because a LUT shared across a
-hierarchy boundary is counted against both children but only once against the
-parent. The figures below the rule are the tool's own, not column sums.}
+\caption{Post-place-and-route resource utilization of the coherent multi-core
+system with the proposed snoop filter, AMD/Xilinx XCZU7EV at 60\,MHz. Totals
+below the rule are those reported by Vivado.}
 \label{tab:fpga}
 \centering
-\footnotesize
+\scriptsize
 \setlength{\tabcolsep}{3.5pt}
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
@@ -36,12 +35,7 @@ Module & LUTs & FFs & BRAMs & DSPs \\
 \addlinespace[2pt]
 \textbf{Cache extension}                     & \textbf{6{,}540} & \textbf{4{,}628} & 20 & 0 \\
 \quad Data Cache Unit ($\times$4)            & 5{,}816 & 3{,}998 & 20 &  0 \\
-\quad\quad controller + HCL                  & 2{,}860 & 2{,}846 &  0 &  0 \\
-\quad\quad tag RAM                           & 1{,}677 &      96 &  4 &  0 \\
-\quad\quad data RAM                          & 1{,}289 & 1{,}056 & 16 &  0 \\
 \quad Snoopy bus                             &      728 &     630 &  0 &  0 \\
-\quad\quad round-robin arbiter               &      251 &       2 &  0 &  0 \\
-\quad\quad Invalidation Table                &       69 &     116 &  0 &  0 \\
 \quad\quad \textbf{snoop filter (this work)} & \textbf{408} & \textbf{512} & 0 & 0 \\
 \addlinespace[2pt]
 \textbf{AXI4 crossbar}                       & 2{,}125 &     279 &  0 &  0 \\
