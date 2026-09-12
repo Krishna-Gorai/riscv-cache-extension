@@ -2,52 +2,57 @@
 %%   python scripts/table1.py filtered
 %% and transcribed here; regenerate that if the build changes.
 %%
-%% Re-measured 2026-09-08 against the RTL that covers fills in flight. The
-%% reference build was re-run in the same batch, so the deltas quoted in the
-%% text come from one source tree with one parameter changed rather than from
-%% two runs weeks apart.
+%% Single column, in the shape of the original's Table I: the module tree down
+%% the left, then LUTs, FFs, BRAMs, DSPs, and Available / Utilisation rows
+%% under the rule. The instance count is folded into the name and the LUTRAM
+%% column is gone -- the one number from it that matters, the filter's 208
+%% LUTRAM out of 408, is stated in the text where it is argued.
 %%
-%% No total row on purpose. Vivado's figure for the SoC is not the sum of the
-%% rows above it -- a LUT shared across a hierarchy boundary counts against both
-%% children but once against the parent -- so a total sitting under the column
-%% reads as an arithmetic error. The tool's own figures are stated below the
-%% rule instead, where they are plainly a separate statement.
-\begin{table*}[t]
-\caption{Post-implementation resources, XCZU7EV at 60\,MHz. Sub-rows may sum
-slightly above their parent, because a LUT shared across a hierarchy boundary is
-counted against both children but only once against the parent. The two figures
-below the rule are the tool's own, not column sums.}
+%% Re-measured 2026-09-08 against the RTL that covers fills in flight, both
+%% variants in one batch. No total row inside the tree on purpose: Vivado's
+%% figure for the SoC is not the sum of the rows above it -- a LUT shared across
+%% a hierarchy boundary counts against both children but once against the
+%% parent -- so a total under the column would read as an arithmetic error. The
+%% tool's own figures sit below the rule instead, where they are plainly a
+%% separate statement.
+\begin{table}[t]
+\caption{Post-implementation resources, XCZU7EV at 60\,MHz, filtered build.
+Sub-rows may sum slightly above their parent, because a LUT shared across a
+hierarchy boundary is counted against both children but only once against the
+parent. The figures below the rule are the tool's own, not column sums.}
 \label{tab:fpga}
 \centering
-\begin{tabular}{@{}lrrrrrr@{}}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Module & $\times$ & LUTs & of which LUTRAM & Flip-flops & BRAM tiles & DSP \\
+Module & LUTs & FFs & BRAMs & DSPs \\
 \midrule
-\textbf{Processing element}          & 4  & 17{,}833 & 0   & 9{,}948 & 32 & 20 \\
-\quad RISC-V core (CV32E40P)         & 4  & 16{,}929 & 0   & 8{,}404 & 0  & 20 \\
-\quad ITCM + Instruction-Bridge      & 4  & 252      & 0   & 36      & 32 & 0  \\
-\quad Data-Bridge                    & 4  & 319      & 0   & 32      & 0  & 0  \\
-\quad AXI4 masters                   & 12 & 333      & 0   & 1{,}476 & 0  & 0  \\
-\addlinespace
-\textbf{Cache extension}             & 1  & \textbf{6{,}540} & 208 & \textbf{4{,}628} & 20 & 0 \\
-\quad Data Cache Unit                & 4  & 5{,}816  & 0   & 3{,}998 & 20 & 0  \\
-\quad\quad controller + HCL          & 4  & 2{,}860  & 0   & 2{,}846 & 0  & 0  \\
-\quad\quad tag RAM                   & 4  & 1{,}677  & 0   & 96      & 4  & 0  \\
-\quad\quad data RAM                  & 4  & 1{,}289  & 0   & 1{,}056 & 16 & 0  \\
-\quad Snoopy bus                     & 1  & 728      & 208 & 630     & 0  & 0  \\
-\quad\quad round-robin arbiter       & 1  & 251      & 0   & 2       & 0  & 0  \\
-\quad\quad Invalidation Table        & 1  & 69       & 0   & 116     & 0  & 0  \\
-\quad\quad \textbf{snoop filter (this work)} & 1 & \textbf{408} & \textbf{208} & \textbf{512} & 0 & 0 \\
-\addlinespace
-\textbf{AXI4 crossbar}               & 1  & 2{,}125  & 0   & 279     & 0  & 0  \\
-\textbf{Shared data memory}          & 1  & 724      & 0   & 150     & 64 & 0  \\
-\textbf{Shared instruction memory}   & 1  & 506      & 0   & 86      & 8  & 0  \\
-\textbf{Control region}              & 1  & 113      & 0   & 259     & 0  & 0  \\
+\textbf{Processing element} ($\times$4)      & 17{,}833 & 9{,}948 & 32 & 20 \\
+\quad RISC-V core, CV32E40P                  & 16{,}929 & 8{,}404 &  0 & 20 \\
+\quad ITCM + Instr.-Bridge                   &      252 &      36 & 32 &  0 \\
+\quad Data-Bridge                            &      319 &      32 &  0 &  0 \\
+\quad AXI4 masters ($\times$3 per PE)        &      333 & 1{,}476 &  0 &  0 \\
+\addlinespace[2pt]
+\textbf{Cache extension}                     & \textbf{6{,}540} & \textbf{4{,}628} & 20 & 0 \\
+\quad Data Cache Unit ($\times$4)            & 5{,}816 & 3{,}998 & 20 &  0 \\
+\quad\quad controller + HCL                  & 2{,}860 & 2{,}846 &  0 &  0 \\
+\quad\quad tag RAM                           & 1{,}677 &      96 &  4 &  0 \\
+\quad\quad data RAM                          & 1{,}289 & 1{,}056 & 16 &  0 \\
+\quad Snoopy bus                             &      728 &     630 &  0 &  0 \\
+\quad\quad round-robin arbiter               &      251 &       2 &  0 &  0 \\
+\quad\quad Invalidation Table                &       69 &     116 &  0 &  0 \\
+\quad\quad \textbf{snoop filter (this work)} & \textbf{408} & \textbf{512} & 0 & 0 \\
+\addlinespace[2pt]
+\textbf{AXI4 crossbar}                       & 2{,}125 &     279 &  0 &  0 \\
+\textbf{Shared data memory}, 256\,KiB        &      724 &     150 & 64 &  0 \\
+\textbf{Shared instr.\ memory}, 32\,KiB      &      506 &      86 &  8 &  0 \\
+\textbf{Control region}                      &      113 &     259 &  0 &  0 \\
 \midrule
-\multicolumn{7}{@{}l}{SoC as reported by the tool: 27{,}826 LUT, 15{,}350 FF,
-124 BRAM tiles, 20 DSP} \\
-\multicolumn{7}{@{}l}{Whole device including the board wrapper: 27{,}845 LUT,
-15{,}670 FF} \\
+Whole device, as reported by the tool        & 27{,}845 & 15{,}670 & 124 & 20 \\
+\addlinespace[1pt]
+Available                                    & 230{,}400 & 460{,}800 & 312 & 1{,}728 \\
+Utilisation (\%)                             &    12.09 &     3.40 & 39.74 & 1.16 \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
