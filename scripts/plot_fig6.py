@@ -52,6 +52,12 @@ PANELS = [
     ("fft", "FFT", "FFT Input Size per Sample",
      ["256", "512", "1024"]),
 ]
+# The same transform with its stages reordered so the working set stays inside
+# the DCU -- bit-identical output, same golden. It is our answer to the plain
+# FFT's collapse, not something the reference has, so it appears only in the
+# three-series figure and not in the reproduction one.
+FFTB_PANEL = ("fftb", "FFT, cache-blocked", "FFT Input Size per Sample",
+              ["256", "512", "1024"])
 
 YLABEL = "Execution Time ($10^3$ Cycles)"
 
@@ -87,7 +93,8 @@ def main():
     # two sizes instead of three. A group kept with a bar missing is not: an
     # absent bar in a cluster reads as a measured zero.
     panels, dropped = [], []
-    for kern, title, xlabel, sizes in PANELS:
+    want = PANELS + ([FFTB_PANEL] if args.series == 3 else [])
+    for kern, title, xlabel, sizes in want:
         keep = [s for s in sizes
                 if all((kern, s, c) in data for c, _l, _col, _h in series)]
         dropped += [(kern, s) for s in sizes if s not in keep]
@@ -99,7 +106,8 @@ def main():
     if not panels:
         sys.exit("results/fig6.csv has no complete size for any kernel")
 
-    fig, axes = plt.subplots(1, 3, figsize=(7.16, 1.95))
+    n = len(panels)
+    fig, axes = plt.subplots(1, n, figsize=(7.16, 1.75))
 
     for ax, (kern, title, xlabel, sizes) in zip(axes, panels):
         values = [[data[(kern, s, cfg)] for s in sizes]
@@ -116,8 +124,8 @@ def main():
 
     # One legend for all three panels, bordered and inside the last one, which
     # is where the reference puts it. Three entries fit; two leave it smaller.
-    axes[-1].legend(loc="upper left", fontsize=5.6, borderpad=0.3,
-                    handlelength=1.4, handletextpad=0.4, labelspacing=0.25)
+    axes[0].legend(loc="upper left", fontsize=5.4, borderpad=0.3,
+                   handlelength=1.3, handletextpad=0.4, labelspacing=0.25)
 
     fig.tight_layout(pad=0.4, w_pad=1.1)
     name = "fig_exec.pdf" if args.series == 3 else "fig_exec_repro.pdf"

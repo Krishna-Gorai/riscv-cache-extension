@@ -85,3 +85,5 @@ sim/*/
 # Start-Process writes stderr to a sibling of the stdout redirect, and *.log
 # above does not cover the .err suffix. These are transient run logs.
 *.log.err
+paper/*.bbl
+paper/*.blg

@@ -42,7 +42,11 @@ $work = @(
   @{k="fft_512";    kern="fft";    size="512"},
   @{k="fft_1024";   kern="fft";    size="1024"},
   @{k="conv2d_128"; kern="conv2d"; size="128x128"},
-  @{k="matmul_128"; kern="matmul"; size="128x128"}
+  @{k="matmul_128"; kern="matmul"; size="128x128"},
+  # Cache-blocked FFT: same transform, same golden, early stages run block-major.
+  @{k="fftb_256";   kern="fftb";   size="256"},
+  @{k="fftb_512";   kern="fftb";   size="512"},
+  @{k="fftb_1024";  kern="fftb";   size="1024"}
 )
 if ($Only -ne "") {
   $want = $Only.Split(",") | ForEach-Object { $_.Trim() }

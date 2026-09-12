@@ -193,6 +193,14 @@ if __name__ == "__main__":
         rows.append(("conv2d", "%dx%d" % (n, n), n, bench_conv2d(n)))
     for lg in FFT_LOG2:
         rows.append(("fft", "N=%d" % (1 << lg), lg, bench_fft(lg)[0]))
+    # fftb is bench_fft.c built with BENCH_FFT_BLOCK: the early stages run
+    # block-major so the working set fits the cache. The butterflies and their
+    # operands are unchanged, only their order, so the output -- and therefore
+    # the golden -- is identical. Emitting it here rather than computing a
+    # separate model is deliberate: the harness checking fftb against fft's
+    # golden is the proof that the reorder preserved the arithmetic.
+    for lg in FFT_LOG2:
+        rows.append(("fftb", "N=%d" % (1 << lg), lg, bench_fft(lg)[0]))
     for n in STENCIL_N:
         rows.append(("stencil", "%dx%d" % (n, n), n, bench_stencil(n, STENCIL_T)))
 

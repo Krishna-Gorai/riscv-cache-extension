@@ -231,7 +231,139 @@ int main(void) {
         }
     }
 
-    /* --- log2(N) butterfly stages, all N/2 butterflies on this PE -------- */
+    /* --- log2(N) butterfly stages, all N/2 butterflies on this PE --------
+     *
+     * Stage s pairs elements 2^s apart, inside groups of 2^(s+1). So for every
+     * stage whose group is no wider than a block, each butterfly reads and
+     * writes within ONE block, and blocks are independent of each other until
+     * the group outgrows them. That means the early stages can be run block by
+     * block -- all of stage 0..log2(B)-1 on block 0, then on block 1 -- with the
+     * block staying resident the whole time, instead of stage by stage with
+     * every stage streaming all 8N bytes through a cache that cannot hold them.
+     *
+     * The butterflies are the same butterflies with the same operands, merely
+     * in a different order, so the output is bit-identical and the golden
+     * checksum is unchanged. Only the late stages, whose span exceeds a block,
+     * still sweep the whole array: log2(N/B) of them rather than log2(N).
+     *
+     * B is a compile-time choice. 128 points is 1 KiB of re+im, half the DCU,
+     * which leaves room for the two arrays to sit in different sets rather than
+     * fight for the same ones. Unset, the loop is the plain stage-major sweep
+     * above, which is what reproduces the reference's kernel.
+     * ------------------------------------------------------------------------ */
+#ifdef BENCH_FFT_BLOCK
+#  define FFT_BLOCK  ((uint32_t)BENCH_FFT_BLOCK)
+    {
+        /* Early stages, block-major. If N <= B everything is already resident
+         * and this degenerates to the plain loop, which is the right answer. */
+        uint32_t blk   = (FFT_BLOCK < NPT) ? FFT_BLOCK : NPT;
+        uint32_t s_blk = 0;
+        while ((1u << (s_blk + 1)) <= blk) s_blk++;   /* stages with step <= blk */
+
+        for (uint32_t b = 0; b < NPT; b += blk) {
+            for (uint32_t s = 0; s < s_blk; s++) {
+                uint32_t half = 1u << s;
+                uint32_t step = half << 1;
+                for (uint32_t g = b; g < b + blk; g += step) {
+                    for (uint32_t k = 0; k < half; k++) {
+                        uint32_t ia = g + k;
+                        uint32_t ib = ia + half;
+                        int32_t wr = TW[k * (TWN / step)][0];
+                        int32_t wi = TW[k * (TWN / step)][1];
+                        int32_t br = (int32_t)re[ib], bi = (int32_t)im[ib];
+                        int32_t ar = (int32_t)re[ia], ai = (int32_t)im[ia];
+                        int32_t tr = (wr * br - wi * bi) >> 15;
+                        int32_t ti = (wr * bi + wi * br) >> 15;
+                        re[ib] = (uint32_t)((ar - tr) >> 1);
+                        im[ib] = (uint32_t)((ai - ti) >> 1);
+                        re[ia] = (uint32_t)((ar + tr) >> 1);
+                        im[ia] = (uint32_t)((ai + ti) >> 1);
+                    }
+                }
+            }
+        }
+
+        /* Late stages, whose span crosses blocks.
+         *
+         * A butterfly at stage s pairs i with i + 2^s. Once 2^s is a multiple
+         * of the block size B, both indices have the same i mod B -- so the
+         * late stages never mix columns: they are B independent (N/B)-point
+         * FFTs, one per column j = {j, j+B, j+2B, ...}, each with the same
+         * butterflies in the same order as the plain sweep would apply to
+         * those elements. Running them column by column, with the column held
+         * in a small scratch, turns log2(N/B) full sweeps of an array that does
+         * not fit the cache into ONE strided read of it plus stage work on
+         * N/B resident words.
+         *
+         * The first late stage reads straight from the array and the last one
+         * writes straight back to it, so there is no separate gather or
+         * scatter pass and the write count is the same as the plain sweep's.
+         * With a single late stage (N = 2B) the two coincide and the scratch is
+         * never touched.
+         *
+         * The twiddle index is the original one: with ia = j + ma*B and ma's
+         * group start a multiple of step/B, ia mod step = j + mk*B, which is
+         * what the plain loop's k would have been. Same operands, same order,
+         * same rounding -- the output is bit-identical and the golden check
+         * below is what proves it.
+         *
+         * Scratch lives in the shared memory, after every PE's buffers, so it
+         * goes through the DCU like everything else and the comparison stays
+         * honest: a private scratch would take the late stages out of the
+         * cache's hands entirely and overstate what the cache is doing. */
+        if (s_blk < LOG2N) {
+            uint32_t M     = NPT / blk;
+            uint32_t sbase = (uint32_t)NUM_PES * 2u * NPT * 4u + id * 2u * M * 4u;
+            volatile uint32_t *sr = shared_ptr(sbase);
+            volatile uint32_t *si = shared_ptr(sbase + M * 4u);
+
+            for (uint32_t j = 0; j < blk; j++) {
+                for (uint32_t s = s_blk; s < LOG2N; s++) {
+                    uint32_t half  = 1u << s;
+                    uint32_t step  = half << 1;
+                    uint32_t hb    = half / blk;       /* half-span, in column units */
+                    uint32_t sb    = step / blk;       /* group size, in column units */
+                    uint32_t first = (s == s_blk);
+                    uint32_t last  = (s + 1u == LOG2N);
+
+                    for (uint32_t mg = 0; mg < M; mg += sb) {
+                        for (uint32_t mk = 0; mk < hb; mk++) {
+                            uint32_t ma = mg + mk;
+                            uint32_t mb = ma + hb;
+                            uint32_t k  = j + mk * blk;          /* == ia mod step */
+                            int32_t wr = TW[k * (TWN / step)][0];
+                            int32_t wi = TW[k * (TWN / step)][1];
+
+                            int32_t ar, ai, br, bi;
+                            if (first) {
+                                ar = (int32_t)re[j + ma * blk]; ai = (int32_t)im[j + ma * blk];
+                                br = (int32_t)re[j + mb * blk]; bi = (int32_t)im[j + mb * blk];
+                            } else {
+                                ar = (int32_t)sr[ma]; ai = (int32_t)si[ma];
+                                br = (int32_t)sr[mb]; bi = (int32_t)si[mb];
+                            }
+
+                            int32_t tr = (wr * br - wi * bi) >> 15;
+                            int32_t ti = (wr * bi + wi * br) >> 15;
+                            uint32_t nbr = (uint32_t)((ar - tr) >> 1);
+                            uint32_t nbi = (uint32_t)((ai - ti) >> 1);
+                            uint32_t nar = (uint32_t)((ar + tr) >> 1);
+                            uint32_t nai = (uint32_t)((ai + ti) >> 1);
+
+                            if (last) {
+                                re[j + mb * blk] = nbr; im[j + mb * blk] = nbi;
+                                re[j + ma * blk] = nar; im[j + ma * blk] = nai;
+                            } else {
+                                sr[mb] = nbr; si[mb] = nbi;
+                                sr[ma] = nar; si[ma] = nai;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+#else
     for (uint32_t s = 0; s < LOG2N; s++) {
         uint32_t half = 1u << s;
         uint32_t step = half << 1;
@@ -256,6 +388,7 @@ int main(void) {
             }
         }
     }
+#endif
     t1 = CYCLE_LO;
 
     bench_report(id, t1 - t0);

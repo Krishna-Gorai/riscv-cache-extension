@@ -26,3 +26,12 @@ conv2d,128x128,filtered,625110
 matmul,128x128,noncoherent,16899384
 matmul,128x128,coherent,9461615
 matmul,128x128,filtered,8118893
+fftb,256,noncoherent,121213
+fftb,256,coherent,93087
+fftb,256,filtered,88604
+fftb,512,noncoherent,269224
+fftb,512,coherent,238776
+fftb,512,filtered,219017
+fftb,1024,noncoherent,584916
+fftb,1024,coherent,523833
+fftb,1024,filtered,478210
