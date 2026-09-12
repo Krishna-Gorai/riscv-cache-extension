@@ -165,8 +165,8 @@ which confines its coherence traffic to a single shared bus.
 \includegraphics[width=\textwidth]{fig_arch.pdf}
 \caption{Overview of the multi-core RISC-V architecture with the cache
 extension of~\cite{kamaleldin2024} and the snoop filter added by this work
-(shaded). The filter holds a mirror of the tag and valid bits of every DCU and
-tells the INV REQ arbiter whether any other DCU has to receive the request.}
+(shaded, with its mirror update port per DCU dashed). Every PE is wired as
+PE~0; the signal names are those of Section~\ref{sec:design}.}
 \label{fig:arch}
 \end{figure*}
 
@@ -182,7 +182,7 @@ private Data Cache Unit (DCU), a scratchpad Instruction Tightly Coupled Memory
 (ITCM), and an Instruction-Bridge and a Data-Bridge that connect the core to the
 local memories and to a shared AXI4 crossbar, behind which sit a shared
 instruction memory, used as boot memory, and a coherent shared data memory. A
-single snoopy bus is connected to the Data-Bridge of every PE and manages the
+single snoopy bus is connected to the DCU of every PE and manages the
 invalidation of cache lines between the private DCUs.
 
 \subsection{Data Cache Unit}
