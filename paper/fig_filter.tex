@@ -3,203 +3,152 @@
 %%
 %%  Build:  pdflatex fig_filter.tex   ->  fig_filter.pdf
 %%
-%%  fig_arch.tex shows where the filter sits in the system. This shows what is
-%%  inside it, and the one thing outside it that makes it correct.
+%%  Redrawn 2026-09-13 in the terminology of the paper's Section V, so that
+%%  every block and signal here is defined in the text:
+%%    update port from each DCU: "tag + valid update" (the signals that write
+%%        its Status-RAM and Tag-RAM), and "fill in flight + address"
+%%    the INV REQ selected by the INV REQ arbiter: issued by PE i, address of w
+%%        = set index . tag
+%%    per (PE, way): Tag-RAM mirror (LUTRAM, read at the set index of w),
+%%        valid bit (flip-flop), compare "stored tag = tag of w AND valid"
+%%    per PE: OR over the two ways -> "holds the line"; fill compare ->
+%%        "is fetching the line"; OR -> "holds or is fetching"
+%%    exclude the requesting PE i -> sharer set S(w);  S(w) = empty -> suppress
+%%        the broadcast, else broadcast and grant by condition (1)
 %%
-%%  Read left to right. The mirror is written from the left by the same signals
-%%  that write each cache, and read from below by the address the arbiter just
-%%  picked. Per (core, way) the hit decision is drawn as the RTL has it:
-%%
-%%      way_hit = valid[set][way]  AND  (tag_mem[set] == qry_tag)
-%%
-%%  -- a comparator fed by the mirror's tag read-out and the query tag, then an
-%%  AND with the valid bit, then an OR across the two ways into held[c]. The
-%%  other half of the decision, on the right, is who is FETCHING the line: a
-%%  refill in flight is a cache that holds nothing yet and must still be told.
-%%  Their union is the sharer set, and the sharer set gates the broadcast.
-%%
-%%  Routing rules: no signal passes through a block. Lines may cross lines --
-%%  a crossing without a dot is not a connection -- but never a box. The valid
-%%  box is short so the tag lines clear it; the update line to it threads the
-%%  gap between the two ways and then the gap between the two comparators;
-%%  qry_tag is one grey bus with a junction dot per tap; the per-core OR
-%%  outputs merge on an explicit bus into the mask; gates in the bus column are
-%%  rotated so that column reads top to bottom.
-%%
-%%  Greyscale by construction, same conventions as fig_arch: distributed RAM is
-%%  the light fill, flip-flops the mid fill, the correctness term the dark one.
+%%  Routing rule, so that no two lines cross: the "address of w" is one bus
+%%  that threads left to right through every block that reads it (Tag-RAM
+%%  mirror, valid bit, fill compare); those blocks take their DCU inputs from
+%%  above, the compare block hangs below the bus and takes "tag of w" from a
+%%  tap (junction dot), and all results flow downwards in their own columns.
+%%  PE 0 is drawn in full; PE 1-3 are identical and drawn collapsed.
 %% =============================================================================
 \documentclass[border=3pt]{standalone}
 \usepackage{tikz}
 \usepackage{times}
-\usetikzlibrary{positioning,fit,arrows.meta,calc,shapes.gates.logic.US}
+\usepackage{amssymb}
+\usetikzlibrary{arrows.meta,calc}
 
 \begin{document}
 \begin{tikzpicture}[
-  x=1mm, y=1mm, font=\footnotesize,
-  box/.style   ={draw,rectangle,align=center,inner sep=1.5pt},
-  ram/.style   ={box,fill=black!6,minimum width=19mm,minimum height=5.5mm,font=\scriptsize},
-  ff/.style    ={box,fill=black!14,minimum width=9mm,minimum height=4mm,font=\scriptsize},
-  cmp/.style   ={box,fill=white,minimum width=8mm,minimum height=5mm,font=\scriptsize},
-  new/.style   ={box,fill=black!22,line width=1.1pt,font=\scriptsize,minimum height=6mm},
-  grp/.style   ={draw,rectangle,inner sep=2mm,rounded corners=1pt},
-  ln/.style    ={draw,-{Latex[length=1.4mm]},line width=0.5pt},
-  bus/.style   ={draw,-{Latex[length=1.4mm]},line width=0.9pt},
-  wire/.style  ={draw,line width=0.5pt},
-  qwire/.style ={draw,line width=0.5pt,draw=black!55},
-  dot/.style   ={circle,fill=black,inner sep=0,minimum size=1.1mm},
-  tag/.style   ={font=\scriptsize,inner sep=1pt,fill=white},
-  lbl/.style   ={font=\scriptsize\itshape,inner sep=1pt,align=center},
-  hdr/.style   ={font=\scriptsize\bfseries,inner sep=1pt},
-  gate/.style  ={draw,scale=0.8,rotate=-90},
+  x=1mm, y=1mm, font=\scriptsize,
+  box/.style  ={draw,rectangle,align=center,inner sep=1.2pt},
+  ram/.style  ={box,fill=black!6},
+  ff/.style   ={box,fill=black!16},
+  op/.style   ={box,fill=white},
+  pe/.style   ={box,fill=black!3},
+  src/.style  ={box,fill=white},
+  new/.style  ={box,fill=black!22,line width=1.1pt},
+  ln/.style   ={draw,-{Latex[length=1.4mm]},line width=0.45pt},
+  wire/.style ={draw,line width=0.45pt},
+  bus/.style  ={draw,line width=1.1pt},
+  mir/.style  ={draw,-{Latex[length=1.4mm]},dashed,dash pattern=on 1.6pt off 1.2pt,line width=0.7pt},
+  dot/.style  ={circle,fill=black,inner sep=0,minimum size=1.2mm},
+  lab/.style  ={font=\tiny,inner sep=0.7pt,fill=white,align=center},
+  labr/.style ={font=\tiny,inner sep=0.4pt,rotate=90,anchor=center},
 ]
 
-\def\rowA{0} \def\rowB{-19} \def\rowC{-38} \def\rowD{-57}
-\def\qbus{9.5}    % x of the qry_tag distribution bus
-\def\mbus{57}     % x of the held[c] merge bus
+% ----------------------------------------------------------- the request
+\node[src,minimum width=24mm,minimum height=13mm,anchor=east] (srcb) at (-18, 0)
+  {INV REQ selected by\\the INV REQ arbiter:\\[1pt]
+   issued by PE $i$,\\address of $w$};
+% the "address of w" bus starts here and threads through every block that reads it
+\draw[bus] (-18, 0) -- (2, 0);
+\node[lab,anchor=south] at (-8, 0.9) {address of $w$};
+\node[lab,anchor=north] at (-8, -0.9) {(set index, tag)};
+% the requester's index goes straight down to the exclusion row
+\draw[ln] (-36, -6.5) -- (-36, -54) -- (30, -54);
+\node[lab,anchor=east] at (-36.8, -30) {$i$};
 
-% ------------------------------------------------------------ update ports (left)
-\node[lbl,anchor=south] (updlbl) at (-42,10)
-  {one update port per DCU, driven by\\the same signals that write its own arrays};
-\foreach \c/\y in {0/\rowA, 1/\rowB, 2/\rowC, 3/\rowD} {
-  \node[box,fill=white,minimum width=24mm,minimum height=9mm,font=\scriptsize,align=left]
-    (upd\c) at (-42,\y) {\textbf{DCU \c}\\[-1pt] upd\_valid $\cdot$ set $\cdot$ way\\[-1pt] tag $\cdot$ inst};
+% ----------------------------------------------------------- PE 0 in full
+\node[pe,minimum width=68mm,minimum height=7mm,anchor=south west] (dcu0) at (0, 12)
+  {\textbf{DCU 0}\\[-1pt] {\tiny update port: its Status-RAM and Tag-RAM write signals; line fill in progress}};
+
+% two ways, centres c = 12 and 38
+\foreach \k/\c in {0/12, 1/38} {
+  % on the bus: tap for "tag of w", then the Tag-RAM mirror, then the valid bit
+  \node[dot] (tp\k) at (\c-10, 0) {};
+  \node[ram,minimum width=12mm,minimum height=5mm] (tr\k) at (\c-3, 0)
+    {Tag-RAM\\[-1pt]mirror};
+  \node[ff,minimum width=6mm,minimum height=5mm] (vb\k) at (\c+7, 0) {valid};
+  \draw[bus] (\c-11, 0) -- (\c-9, 0);
+  \draw[bus] (\c+3, 0) -- (\c+4, 0);
+  \draw[bus] (\c+10, 0) -- (\c+16, 0);
+  % update port from DCU 0, straight down into both
+  \draw[ln] (\c-3, 12) -- (\c-3, 2.5);
+  \draw[ln] (\c+7, 12) -- (\c+7, 2.5);
+  \node[labr] at (\c-4.3, 7.2) {tag};
+  \node[labr] at (\c+8.3, 7.2) {valid};
+  \node[lab] at (\c+2, 4.2) {way \k};
+  % compare block below, fed by the tap, the stored tag and the valid bit
+  \node[op,minimum width=20mm,minimum height=7mm] (cp\k) at (\c-1.5, -14)
+    {stored tag $=$ tag of $w$\\[-1pt] $\wedge$ valid};
+  \draw[ln] (tp\k) -- (\c-10, -10.5);
+  \draw[ln] (tr\k.south) -- (\c-3, -10.5);
+  \draw[ln] (vb\k.south) -- (\c+7, -10.5);
+  % result of this way goes down to the OR
+  \draw[ln] (cp\k.south) -- (\c-1.5, -23.5);
 }
+\node[lab,anchor=east] at (1.4, -6) {tag of $w$};
+\node[lab,anchor=west] at (9.6, -6) {stored\\[-1pt]tag};
 
-% ------------------------------------------------------------- the mirror
-\node[hdr,anchor=south] (mirhdr) at (-6,9.5) {Tag mirror};
-\foreach \c/\y in {0/\rowA, 1/\rowB, 2/\rowC, 3/\rowD} {
-  \node[ram] (t\c0) at (-6,\y+5.5) {way 0 $\cdot$ tag\_mem[64]};
-  \node[ram] (t\c1) at (-6,\y-5.5) {way 1 $\cdot$ tag\_mem[64]};
-  \coordinate (b\c) at (-26,\y);
-  \draw[wire] (upd\c.east) -- (b\c);
-  \node[dot] at (b\c) {};
-  \draw[bus] (b\c) |- (t\c0.west);
-  \draw[bus] (b\c) |- (t\c1.west);
+% fill compare, also on the bus, also fed from DCU 0
+\node[new,minimum width=14mm,minimum height=7mm] (fc0) at (61, 0)
+  {fill addr.\ $=$\\[-1pt] line addr.\ of $w$};
+\draw[mir] (61, 12) -- (61, 3.5);
+\node[lab,anchor=east] at (60.2, 7.5) {fill in flight\\[-1pt]+ address};
+\draw[bus] (68, 0) -- (73, 0);
+\draw[ln] (fc0.south) -- (61, -37.5);
+\node[lab,anchor=west] at (61.8, -21) {PE 0 is fetching the line};
+
+% OR over the two ways, then OR with the fill term
+\node[op,minimum width=33mm,minimum height=5mm] (or0) at (23.5, -26) {$\vee$};
+\draw[ln] (or0.south) -- (23.5, -37.5);
+\node[lab,anchor=west] at (24.3, -33) {PE 0 holds the line};
+\node[op,minimum width=45mm,minimum height=5mm] (or0b) at (42.5, -40) {$\vee$};
+\draw[ln] (or0b.south) -- (42.5, -51);
+\node[lab,anchor=west] at (43.3, -46) {PE 0 holds or is fetching the line};
+
+% ----------------------------------------------------------- PE 1..3 collapsed
+\foreach \j/\x in {1/84, 2/112, 3/140} {
+  \node[pe,minimum width=22mm,minimum height=6mm,anchor=south] (dcu\j) at (\x, 12)
+    {\textbf{DCU \j}};
+  \node[pe,minimum width=22mm,minimum height=22mm] (blk\j) at (\x, -6)
+    {\textbf{PE \j}\\[-1pt] same as PE 0:\\[-1pt] Tag-RAM mirror and\\[-1pt]
+     valid bit per way,\\[-1pt] compare, fill compare};
+  \draw[ln]  (\x-4, 12) -- (\x-4, 5);
+  \draw[mir] (\x+4, 12) -- (\x+4, 5);
+  \draw[ln]  (blk\j.south) -- (\x, -51);
 }
-\node[grp,fit=(t00)(t31),inner sep=2mm] (mirror) {};
+\draw[bus] (95, 0) -- (101, 0);
+\draw[bus] (123, 0) -- (129, 0);
+\node[lab,anchor=east] at (79.4, 8.5) {tag + valid};
+\node[lab,anchor=west] at (88.6, 8.5) {fill};
 
-% ------------------------------------------------------------- hit decision, per way
-\node[hdr,anchor=south] (cmphdr) at (19,9.5) {$=$ qry\_tag};
-\node[hdr,anchor=south] (vhdr)   at (29,9.5) {valid};
-\node[hdr,anchor=south] (andhdr) at (41,9.5) {way\_hit};
-\node[hdr,anchor=south] (orhdr)  at (52,9.5) {held[$c$]};
-\foreach \c/\y in {0/\rowA, 1/\rowB, 2/\rowC, 3/\rowD} {
-  % comparator per way: tag read-out from the west (upper), qry_tag tap (lower)
-  \node[cmp] (e\c0) at (19,\y+5.5) {$=$};
-  \node[cmp] (e\c1) at (19,\y-5.5) {$=$};
-  % tag read-out straight into the comparator's centre; the qry_tag tap enters
-  % the same face 1.6 mm lower, so neither line has to bend
-  \draw[ln] (t\c0.east) -- (e\c0.west);
-  \draw[ln] (t\c1.east) -- (e\c1.west);
-  \coordinate (qt\c0) at (\qbus,\y+5.5-1.6);
-  \coordinate (qt\c1) at (\qbus,\y-5.5-1.6);
-  \node[dot] at (qt\c0) {}; \node[dot] at (qt\c1) {};
-  \draw[ln,qwire] (qt\c0) -- (15,\y+5.5-1.6);
-  \draw[ln,qwire] (qt\c1) -- (15,\y-5.5-1.6);
-  % valid bits sit between the ways; their update line threads the two gaps
-  \node[ff] (v\c) at (29,\y) {valid $64\!\times\!2$};
-  \draw[ln] (b\c) -- (v\c.west);
-  % AND per way: comparator on the outer input, valid on the inner one
-  % AND gates anchored ON the input the comparator feeds, so that line is dead
-  % straight; the valid bit then takes the other (inner) input
-  \node[and gate US,draw,logic gate inputs=nn,scale=0.65,anchor=input 1] (a\c0) at (38.5,\y+5.5) {};
-  \node[and gate US,draw,logic gate inputs=nn,scale=0.65,anchor=input 2] (a\c1) at (38.5,\y-5.5) {};
-  \draw[ln] (e\c0.east) -- (a\c0.input 1);
-  \draw[ln] (e\c1.east) -- (a\c1.input 2);
-  \coordinate (vt\c) at (36,\y);
-  \draw[wire] (v\c.east) -- (vt\c);
-  \node[dot] at (vt\c) {};
-  \draw[ln] (vt\c) |- (a\c0.input 2);
-  \draw[ln] (vt\c) |- (a\c1.input 1);
-  % OR across the two ways
-  \node[or gate US,draw,logic gate inputs=nn,scale=0.75] (or\c) at (52,\y) {};
-  \draw[ln] (a\c0.output) -- ++(2,0) |- (or\c.input 1);
-  \draw[ln] (a\c1.output) -- ++(2,0) |- (or\c.input 2);
-  % merge bus tap
-  \coordinate (mt\c) at (\mbus,\y);
-  \draw[wire] (or\c.output) -- (mt\c);
-  \node[dot] at (mt\c) {};
-}
-\draw[qwire] (\qbus,-81) -- (\qbus,\rowA+5.5-1.6);
-\draw[wire]  (\mbus,\rowA) -- (\mbus,\rowD);
+% ----------------------------------------------------------- sharer set
+\node[op,minimum width=122mm,minimum height=6mm,anchor=north west] (mask) at (30, -51)
+  {exclude the requesting PE $i$ (a DCU is never told about its own write)};
+\draw[ln] (mask.south) -- (91, -63);
+\node[lab,anchor=west] at (91.8, -60) {sharer set $S(w)$};
 
-% ------------------------------------------------------------- query path (below)
-\node[box,fill=white,minimum width=30mm,minimum height=7mm,font=\scriptsize] (q) at (-10,-74)
-  {\textbf{qry\_addr} = win\_addr, the arbiter's pick\\[-1pt] split into set index $\cdot$ tag};
-% set index: straight up into the mirror, labelled on the line
-\draw[bus] (q.north) -- (mirror.south -| q.north)
-  node[tag,pos=0.5,anchor=east] {set index};
-% qry_tag: out of the bottom of the query box and along a horizontal run long
-% enough to carry its label, then up the bus
-\draw[qwire] (q.south) -- (-10,-81) -- (\qbus,-81)
-  node[tag,pos=0.5,anchor=south] {qry\_tag};
+\node[op,minimum width=18mm,minimum height=6mm,anchor=north] (empty) at (91, -63) {$S(w) = \emptyset$?};
+\node[op,minimum width=30mm,minimum height=9mm,anchor=west] (arb) at (126, -66)
+  {INV REQ arbiter:\\[-1pt] grant condition (1)};
+\draw[ln] (100, -66) -- (126, -66);
+\node[lab,anchor=south] at (113, -65.2) {yes: suppress the broadcast,\\[-1pt] grant at once};
+\node[lab,anchor=north] at (113, -66.8) {no: broadcast the INV REQ,\\[-1pt] grant when $\bigwedge_{j \ne i} r_j(t)$};
 
-\node[lbl,anchor=north west,align=left] (stnote) at (-24,-87)
-  {set index reads all eight tag arrays at once; the tag is checked in all eight comparators\\
-   tags: distributed RAM --- no reset, one write port, one read port\\
-   valid bits: flip-flops --- resettable, all 8 read in one cycle};
-
-% ------------------------------------------------------------- mask requester
-\node[box,fill=white,minimum width=18mm,minimum height=8mm,font=\scriptsize] (mask) at (70,-28.5)
-  {clear own bit\\[-1pt] held[qry\_core] $\leftarrow$ 0};
-\draw[bus] (\mbus,-28.5) -- (mask.west);
-\node[dot] at (\mbus,-28.5) {};
-\node[lbl,anchor=north] at (74,-33.5) {a core never invalidates\\its own copy via the bus};
-
-\node[box,fill=white,minimum width=16mm,minimum height=7mm,font=\scriptsize\bfseries] (held) at (92,-28.5)
-  {held\_o[3:0]};
-\draw[bus] (mask.east) -- (held.west);
-
-\node[grp,fit=(updlbl)(mirhdr)(cmphdr)(vhdr)(andhdr)(orhdr)(upd0)(upd3)(mirror)(q)(stnote)(e00)(e31)(or0)(or3)(mask)(held),inner sep=3.5mm,
-      label={[font=\small\bfseries,inner sep=3pt]above:snoop\_filter --- an exact mirror of every cache's committed tags}] (filt) {};
-
-% ------------------------------------------------------------- the fill term (far right)
-\node[lbl,anchor=south] (filllbl) at (120,3)
-  {from each DCU: is a refill of\\THIS line already in flight?};
-\node[new,minimum width=34mm] (fill) at (120,-4)
-  {\textbf{fills in flight}\\[-1pt]
-   filling[$c$] = fill\_busy[$c$]\\[-1pt] $\wedge$ line(fill\_addr[$c$]) $=$ line(win\_addr)};
-
-\node[or gate US,gate,logic gate inputs=nn] (uor) at (120,-20) {};
-\draw[bus] (held.east) -- ++(3,0) |- ($(uor.input 1)+(0,3.5)$) -- (uor.input 1);
-\draw[bus] (fill.south) -- ++(0,-2.5) -| (uor.input 2);
-\node[tag,anchor=west] at (125,-19.5) {$\lor$, then $\wedge\,\neg$requester};
-
-\node[box,fill=white,minimum width=16mm,minimum height=6.5mm,font=\scriptsize\bfseries] (sh) at (120,-33)
-  {sharers[3:0]};
-\draw[bus] (uor.output) -- (sh.north);
-
-\node[or gate US,gate,logic gate inputs=nnnn] (anyor) at (120,-45) {};
-\coordinate (shsplit) at (120,-38.5);
-\draw[wire] (sh.south) -- (shsplit);
-\foreach \i in {1,2,3,4} { \draw[ln] (shsplit) -| (anyor.input \i); }
-\node[tag,anchor=west] at (125,-45) {reduce $\to$ any\_sharer};
-
-\node[and gate US,gate,logic gate inputs=nn] (and) at (120,-59) {};
-\draw[bus] (anyor.output) -- ++(0,-2) -| (and.input 1);
-\draw[ln] (133,-53.5) -| (and.input 2) node[tag,pos=0,anchor=west] {inv\_arb\_valid};
-
-\node[box,fill=white,minimum width=20mm,minimum height=7mm,font=\scriptsize\bfseries] (bn) at (120,-71)
-  {bcast\_needed};
-\draw[bus] (and.output) -- (bn.north);
-\node[lbl,anchor=north] (bnlbl) at (120,-76)
-  {0: grant now, tell nobody\\1: hold the grant until the sharers are ready};
-
-\node[grp,fit=(filllbl)(fill)(uor)(sh)(anyor)(and)(bn)(bnlbl),inner sep=3.5mm,
-      label={[font=\small\bfseries,inner sep=3pt]above:in snoopy\_bus --- residency $\cup$ imminent residency}] (busgrp) {};
-
-% ---------------------------------------------------------------------- legend
-\node[ram,minimum width=5mm,minimum height=3mm,inner sep=0] at (-52,-106.0) {};
-\node[lbl,anchor=west,align=left] at (-49,-106.0) {distributed RAM (LUTRAM)};
-\node[ff,minimum width=5mm,minimum height=3mm,inner sep=0] at (-52,-110.5) {};
-\node[lbl,anchor=west,align=left] at (-49,-110.5) {flip-flops};
-\node[new,minimum width=5mm,minimum height=3mm,inner sep=0] at (-52,-115.0) {};
-\node[lbl,anchor=west,align=left] at (-49,-115.0) {the term without which the filter loses invalidations};
-\node[dot] at (-52,-119.5) {};
-\node[lbl,anchor=west,align=left] at (-49,-119.5) {junction; a crossing without a dot is not a connection};
-\draw[qwire] (-54.5,-124) -- (-49.5,-124);
-\node[lbl,anchor=west,align=left] at (-49,-124.0) {qry\_tag distribution bus};
+% ----------------------------------------------------------- legend
+\node[ram,minimum width=5mm,minimum height=3mm,inner sep=0,anchor=west] at (-40, -80) {};
+\node[font=\tiny,anchor=west] at (-34, -80) {distributed RAM (LUTRAM), read at the set index of $w$};
+\node[ff,minimum width=5mm,minimum height=3mm,inner sep=0,anchor=west] at (30, -80) {};
+\node[font=\tiny,anchor=west] at (36, -80) {flip-flops};
+\node[new,minimum width=5mm,minimum height=3mm,inner sep=0,anchor=west] at (54, -80) {};
+\node[font=\tiny,anchor=west] at (60, -80) {imminent residency (Section V-B)};
+\draw[bus] (104, -80) -- (110, -80); \node[dot] at (107, -80) {};
+\node[font=\tiny,anchor=west] at (112, -80) {bus with tap};
+\draw[mir] (130, -80) -- (136, -80);
+\node[font=\tiny,anchor=west] at (138, -80) {fill-in-flight signal};
 
 \end{tikzpicture}
 \end{document}
