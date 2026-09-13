@@ -301,8 +301,8 @@ on a small update port driven by the same signals that write its own
 Status-RAM and Tag-RAM, so the mirror cannot drift from the state it mirrors.
 For the INV REQ selected by the arbiter, the set index of its address reads
 one entry from every array, the stored tag is compared with the tag of the
-address and the result is qualified by the valid bit; the two ways of each
-DCU are ORed and the requesting PE is excluded. A Bloom filter was rejected
+address and the result is ANDed with the valid bit; the two ways of each DCU
+are ORed and the requesting PE is excluded. A Bloom filter was rejected
 because removing entries from it requires exactly the information the mirror
 already has.
 
