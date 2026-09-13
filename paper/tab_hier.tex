@@ -17,8 +17,7 @@
 %% separate statement.
 \begin{table}[t]
 \caption{Post-place-and-route resource utilization of the coherent multi-core
-system with the proposed snoop filter, AMD/Xilinx XCZU7EV at 60\,MHz. Totals
-below the rule are those reported by Vivado.}
+system with the proposed snoop filter, AMD/Xilinx XCZU7EV at 60\,MHz.}
 \label{tab:fpga}
 \centering
 \scriptsize
@@ -32,19 +31,15 @@ Module & LUTs & FFs & BRAMs & DSPs \\
 \quad ITCM + Instr.-Bridge                   &      252 &      36 & 32 &  0 \\
 \quad Data-Bridge                            &      319 &      32 &  0 &  0 \\
 \quad AXI4 masters ($\times$3 per PE)        &      333 & 1{,}476 &  0 &  0 \\
-\addlinespace[2pt]
 \textbf{Cache extension}                     & \textbf{6{,}540} & \textbf{4{,}628} & 20 & 0 \\
 \quad Data Cache Unit ($\times$4)            & 5{,}816 & 3{,}998 & 20 &  0 \\
 \quad Snoopy bus                             &      728 &     630 &  0 &  0 \\
 \quad\quad \textbf{snoop filter (this work)} & \textbf{408} & \textbf{512} & 0 & 0 \\
-\addlinespace[2pt]
 \textbf{AXI4 crossbar}                       & 2{,}125 &     279 &  0 &  0 \\
 \textbf{Shared data memory}, 256\,KiB        &      724 &     150 & 64 &  0 \\
 \textbf{Shared instr.\ memory}, 32\,KiB      &      506 &      86 &  8 &  0 \\
-\textbf{Control region}                      &      113 &     259 &  0 &  0 \\
 \midrule
 Whole device, as reported by the tool        & 27{,}845 & 15{,}670 & 124 & 20 \\
-\addlinespace[1pt]
 Available                                    & 230{,}400 & 460{,}800 & 312 & 1{,}728 \\
 Utilisation (\%)                             &    12.09 &     3.40 & 39.74 & 1.16 \\
 \bottomrule
