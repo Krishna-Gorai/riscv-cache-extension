@@ -52,21 +52,21 @@ Private data caches allow the soft cores of an FPGA-based multi-core system to
 hide the access latency of a shared memory, but the caches then have to be kept
 coherent. A recently proposed cache extension for RISC-V multi-core systems
 does this in hardware, with a snooping invalidation bus and without any
-modification to the core. In this paper, the traffic on that bus is examined.
-The cache extension is reproduced at the register-transfer level, its snoopy
-bus is instrumented, and the number of invalidation requests that actually
-invalidate a cache line in another core is counted. On the benchmark kernels
-of the original evaluation this number is zero: the kernels partition their
-data between the processing elements, so every written line is private to the
-core that writes it, while each write is still arbitrated across the whole
-system and acknowledged by every other cache. A considerable fraction of each
-core's execution time is spent in this way, and for a streaming kernel the
-overhead outweighs the benefit of the cache. We propose a snoop filter
-that keeps a copy of the tag and valid bits of every data cache unit inside
-the snoopy bus, so that the bus can suppress an invalidation request when no
-other cache holds the addressed line or is fetching it. A cost model of the
-bus protocol explains where the saving comes from, and the filter is evaluated
-in execution time, coherence correctness and FPGA resource utilization.
+modification to the core. In this paper we look at the traffic on that bus.
+We reproduce the cache extension at the register-transfer level, instrument
+its snoopy bus, and count how many invalidation requests actually invalidate
+a cache line in another core. On the benchmark kernels of the original
+evaluation the answer is none. The kernels partition their data between the
+processing elements, so every written line is private to the core that writes
+it, and yet each write is still arbitrated across the whole system and
+acknowledged by every other cache. A considerable fraction of each core's
+execution time is spent in this way, and for a streaming kernel the overhead
+is larger than the benefit of the cache. We propose a snoop filter that keeps
+a copy of the tag and valid bits of every data cache unit inside the snoopy
+bus, so that the bus can suppress an invalidation request when no other cache
+holds the addressed line or is fetching it. A cost model of the bus protocol
+explains where the saving comes from. The filter is evaluated in terms of
+execution time, coherence correctness and FPGA resource utilization.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -80,44 +80,45 @@ Cache Coherency, Snoop Filter, RISC-V, Multi-Core SoC, FPGA
 Multi-core systems implemented on FPGAs are increasingly used for embedded and
 edge computing, where several soft RISC-V cores share a common memory whose
 access latency is high compared to the clock period of the cores. Private data
-caches hide this latency, but as soon as each core caches shared data the
-copies have to be kept coherent, and the cost of coherence is charged against
-the same performance the caches were added to provide: as hardware for tag and
-status memories, and as the time the cores spend waiting for coherence actions
-that are serialized across the whole system.
+caches hide this latency. However, as soon as each core caches shared data
+the copies have to be kept coherent, and the cost of coherence is charged
+against the very performance the caches were added to provide, partly as
+hardware for tag and status memories and partly as the time the cores spend
+waiting for coherence actions that are serialized across the whole system.
 
 Several hardware and software coherence schemes have been proposed for
 scalable architectures~\cite{jetty,cgct,regionscout}, and the RISC-V ecosystem
 provides coherent interconnect fabrics for large
 systems~\cite{tilelink,openpiton,cifer}. Adopting one of these means adopting
-its interconnect and, in most cases, modifying the core, which is exactly the
-development cost a designer working with existing soft cores wants to avoid.
-A seamless cache extension avoids it. Kamaleldin \emph{et
+its interconnect and, in most cases, modifying the core, and this is the
+development cost that a designer working with existing soft cores would like
+to avoid. A seamless cache extension avoids it. Kamaleldin \emph{et
 al.}~\cite{kamaleldin2024} attach a private, write-through Data Cache Unit
 (DCU) to an unmodified RISC-V core through the core's ordinary data port and
-keep the DCUs coherent with a snooping invalidation bus, completely in
+keep the DCUs coherent with a snooping invalidation bus, entirely in
 hardware.
 
-In this work, we reproduce the cache extension of~\cite{kamaleldin2024} at the
-register-transfer level in order to measure how much of the coherence traffic
-it generates is actually necessary. We find that between 6\,\% and 33\,\% of
+In this work we reproduce the cache extension of~\cite{kamaleldin2024} at the
+register-transfer level in order to find out how much of the coherence traffic
+it generates is really necessary. We find that between 6\,\% and 33\,\% of
 the time a core spends in its cache goes to waiting for the snoopy bus, and
-that across four benchmark kernels the system issues 1{,}048{,}821
-invalidation requests of which not one invalidates a cache line in another
-DCU. The kernels partition their arrays between the Processing Elements (PEs),
-so almost every written line is private to one PE, but the bus has no way of
+that over four benchmark kernels the system issues 1{,}048{,}821 invalidation
+requests, not one of which invalidates a cache line in another DCU. The
+kernels partition their arrays between the Processing Elements (PEs), so
+almost every written line is private to one PE, but the bus has no way of
 knowing this. We therefore propose an exact snoop filter that answers this
 question before the bus arbitrates the request. Our contributions are listed
 as follows:
 
 \begin{itemize}
-  \item A measurement of how much of the coherence traffic of the cache
-        extension is necessary and what it costs (Section~\ref{sec:measure}).
-  \item An exact snoop filter, a structural mirror of the tag and valid bits
-        of all DCUs that also covers lines being fetched, and a cost model of
-        the bus protocol that derives its benefit (Section~\ref{sec:filter}).
-  \item An evaluation in execution time, coherence correctness and FPGA
-        resources, and a measurement of directed invalidation as the next
+  \item We measure how much of the coherence traffic of the cache extension
+        is necessary, and what the rest costs (Section~\ref{sec:measure}).
+  \item We propose an exact snoop filter, a structural mirror of the tag and
+        valid bits of all DCUs that also covers lines being fetched, and give
+        a cost model of the bus protocol that explains its benefit
+        (Section~\ref{sec:filter}).
+  \item We evaluate the filter in execution time, coherence correctness and
+        FPGA resources, and measure directed invalidation as a possible next
         step (Sections~\ref{sec:eval} and~\ref{sec:rejected}).
 \end{itemize}
 
@@ -125,34 +126,34 @@ The rest of the paper is structured as follows. Section~\ref{sec:related}
 discusses related work, Section~\ref{sec:design} describes the cache extension
 under study, and Section~\ref{sec:measure} analyzes its coherence traffic. The
 snoop filter is presented in Section~\ref{sec:filter} and evaluated in
-Section~\ref{sec:eval}; Sections~\ref{sec:rejected} to~\ref{sec:concl} report
-the rejected mechanisms, the limitations of this study, and the conclusion.
+Section~\ref{sec:eval}; Sections~\ref{sec:rejected} to~\ref{sec:concl} cover
+directed invalidation, the limitations of this study, and the conclusion.
 
 % =============================================================================
 \section{Related Work}
 \label{sec:related}
 % =============================================================================
 
-Snoop filtering is an established idea; the contribution here is the position
-of the filter, the property it is exact about, and the cost it is measured
-against. JETTY~\cite{jetty} filters, on the receiving side of the bus and
-approximately, the snoops that would miss in a processor's cache, so that the
-energy of a tag lookup is not spent on them. Coarse-grain coherence
-tracking~\cite{cgct} and RegionScout~\cite{regionscout} instead track the
-sharing state of large regions of memory, so that a region known to be
-unshared needs no broadcast at all.
+Snoop filtering itself is not new. JETTY~\cite{jetty} places a small filter on
+the receiving side of the bus and uses it to skip the snoops that would miss
+in a processor's cache anyway, so that the energy of a tag lookup is not spent
+on them. Coarse-grain
+coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout} track the
+sharing state of large regions of memory instead, so that a region known to
+be unshared needs no broadcast at all.
 
-In a bus-based soft multi-core system the cost that matters is different. The
-expense of an unnecessary invalidation is not the energy of the remote tag
-lookups but the serialization it imposes: only one invalidation is granted per
-clock cycle in the whole system, and the grant is held back until every other
-cache is ready to accept it. The filter therefore belongs at the source of the
-request, where it can decide whether to arbitrate at all, and since the caches
-are small, an exact copy of their tag arrays is affordable. Coherent RISC-V
-fabrics such as TileLink~\cite{tilelink}, OpenPiton~\cite{openpiton} and
-CIFER~\cite{cifer} are complete memory systems; the design studied here is an
-extension attached to an unmodified core through its existing memory port,
-which confines its coherence traffic to a single shared bus.
+In a bus-based soft multi-core system, the cost that matters is a different
+one. An unnecessary invalidation is expensive not because of the energy of the
+remote tag lookups but because of the serialization it causes. Only one
+invalidation is granted per clock cycle in the whole system, and the grant is
+held back until every other cache is ready to accept it. For this reason we
+place the filter at the source of the request, where it can decide whether to
+arbitrate at all, and because the caches are small we can afford an exact copy
+of their tag arrays. Coherent RISC-V fabrics such as TileLink~\cite{tilelink},
+OpenPiton~\cite{openpiton} and CIFER~\cite{cifer} are complete memory systems.
+The design studied here is an extension attached to an unmodified core
+through its existing memory port, so its coherence traffic is confined to a
+single shared bus.
 
 % =============================================================================
 \section{The Cache Extension Under Study}
@@ -169,9 +170,9 @@ PE~0; the signal names are those of Section~\ref{sec:design}.}
 \label{fig:arch}
 \end{figure*}
 
-This section describes the cache extension of~\cite{kamaleldin2024} to the
-extent needed to follow the measurements, using the terminology of the
-original paper.
+In this section we describe the cache extension of~\cite{kamaleldin2024} as
+far as is needed to follow the measurements, keeping to the terminology of
+the original paper.
 
 \subsection{Multi-core RISC-V Architecture}
 
@@ -187,68 +188,68 @@ invalidation of cache lines between the private DCUs.
 \subsection{Data Cache Unit}
 
 The DCU is a two-way set-associative, write-through, no-allocate data cache
-with a Least Recently Used (LRU) replacement policy: every write is forwarded
+with a Least Recently Used (LRU) replacement policy. Every write is forwarded
 to the shared data memory, and a write that misses does not install a line.
-The DCU
-processes requests in two sequential pipeline stages. The first stage accepts
-a request either from the local core, which can be a read request (READ REQ)
-or a write request (WRITE REQ), or from the snoopy bus, which can only be an
-invalidation request (INV REQ). For a core request, the first stage reads the
-valid bit from the Status-RAM and the tag from the Tag-RAM and at the same
-time forwards the request to the snoopy bus, a WRITE REQ as an INV REQ. In the
-second stage, the Hit Check Logic (HCL) decides between hit and miss and the
-Cache Control Logic (CCL) acts on the request: a READ REQ that misses issues a
-memory read request (MEM READ REQ) and fills the LRU way of the set with the
-returned line, a WRITE REQ is forwarded as a memory write request
-(MEM WRITE REQ), and an INV REQ clears the valid bit of the addressed line if
-it is resident. An INV REQ has priority over the local core: if it arrives
-while a core request occupies the first stage, that request is displaced into
-a holding register and re-presented once the INV REQ has moved on. A Stall
-Control Logic (SCL) stalls the first stage until the bus grants its forwarded
-request, and the second stage until the response (MEM RESP) of a
-MEM READ REQ or the grant of a MEM WRITE REQ arrives, i.e.\ for the access
-latency of the shared data memory.
+Requests are processed in two sequential pipeline stages. The first stage
+accepts a request either from the local core, which can be a read request
+(READ REQ) or a write request (WRITE REQ), or from the snoopy bus, which can
+only be an invalidation request (INV REQ). For a core request, the first
+stage reads the valid bit from the Status-RAM and the tag from the Tag-RAM,
+and at the same time it forwards the request to the snoopy bus (a WRITE REQ
+is forwarded as an INV REQ). In the second stage the Hit Check Logic (HCL)
+decides between hit and miss and the Cache Control Logic (CCL) acts on the
+request. A READ REQ that misses issues a memory read request (MEM READ REQ)
+and fills the LRU way of the set with the returned line; a WRITE REQ is
+forwarded as a memory write request (MEM WRITE REQ); an INV REQ clears the
+valid bit of the addressed line if the line is resident. An INV REQ has
+priority over the local core. If it arrives while a core request occupies
+the first stage, that request is moved into a holding register and presented
+again once the INV REQ has moved on. A Stall Control Logic (SCL) stalls the
+first stage until the bus grants its forwarded request, and the second stage
+until the response (MEM RESP) of a MEM READ REQ or the grant of a
+MEM WRITE REQ arrives, that is, for the access latency of the shared data
+memory.
 
 \subsection{Snoopy Bus}
 
 The snoopy bus consists of two Round Robin (RR) arbiters, an Invalidation Table
-and a Link Register. The first arbiter, called the INV REQ arbiter in the
-following, arbitrates the INV REQs of all PEs and grants at most one per clock
-cycle. When an INV REQ is granted, its address is broadcast to the DCUs of all
-other PEs, which clear the addressed line if they hold it; the grant is
+and a Link Register. The first arbiter, which we call the INV REQ arbiter
+from here on, arbitrates the INV REQs of all PEs and grants at most one per
+clock cycle. When an INV REQ is granted, its address is broadcast to the DCUs
+of all other PEs, which clear the addressed line if they hold it. The grant is
 withheld until every other DCU is able to accept the broadcast, so that no
-invalidation is lost. The second arbiter handles the atomic Load-Reserved (LR)
-and Store-Conditional (SC) requests with the help of the Link Register. The bus
-guarantees a Multiple-Readers-Single-Writer (MRSW) invariant: plain READ REQs
-are not arbitrated, but while a core has an INV REQ pending for a line,
-recorded in the Invalidation Table, a READ REQ of another core to the same
-line is withheld until the INV REQ has been granted.
+invalidation can be lost. The second arbiter handles the atomic Load-Reserved
+(LR) and Store-Conditional (SC) requests together with the Link Register. The
+bus also guarantees a Multiple-Readers-Single-Writer (MRSW) invariant. Plain
+READ REQs are not arbitrated, but while a core has an INV REQ pending for a
+line, which is recorded in the Invalidation Table, a READ REQ of another core
+to the same line is withheld until the INV REQ has been granted.
 
 \subsection{Reproduction and Experimental Setup}
 
-Our reproduction implements this architecture in SystemVerilog in the
-configuration stated by the original paper: four PEs, each with an unmodified
-CV32E40P core and a private 2\,KiB two-way DCU with 16-byte lines and 64 sets,
-a 256\,KiB shared data memory and a 32\,KiB shared instruction memory behind
-an AXI4 crossbar. A non-coherent version, in which each core accesses the
-shared data memory directly through its Data-Bridge without a DCU, is built
-from the same sources by changing one parameter and is the baseline for all
+We implemented this architecture in SystemVerilog in the configuration given
+in the original paper: four PEs, each with an unmodified CV32E40P core and a
+private 2\,KiB two-way DCU with 16-byte lines and 64 sets, a 256\,KiB shared
+data memory and a 32\,KiB shared instruction memory behind an AXI4 crossbar.
+A non-coherent version, in which each core accesses the shared data memory
+directly through its Data-Bridge and has no DCU, is built from the same
+sources by changing one parameter; it serves as the baseline for all
 comparisons. The shared memories are modelled with a configurable access
-latency, called the memory latency in the following: the number of clock
-cycles between the acceptance of a MEM READ REQ and the first data beat of its
-MEM RESP. Two cycles corresponds to on-chip block RAM (BRAM), as in the
-original design; eight and twenty cycles represent off-chip memories.
+latency, which we call the memory latency from here on. It is the number of
+clock cycles between the acceptance of a MEM READ REQ and the first data beat
+of its MEM RESP. Two cycles corresponds to on-chip block RAM (BRAM), as in the
+original design; eight and twenty cycles stand for off-chip memories.
 
-Execution time is measured with the cycle counter of the cores as the number
-of clock cycles until the slowest PE has finished. The benchmark kernels are
-the memory copy, matrix multiplication, 2-D convolution and Fast Fourier
-Transform (FFT) kernels of the original evaluation, referred to as memcpy,
-matmul, conv2d and FFT; each partitions its data between the four PEs, and
-every run is checked against a golden result. Each DCU also carries hardware
-counters for the cycles it holds a core request (busy cycles), the cycles its
-first stage waits for a grant of the snoopy bus (snoop-stall cycles), the
-INV REQs it receives, and those among them that find a valid matching line to
-clear.
+Execution time is read from the cycle counter of the cores as the number of
+clock cycles until the slowest PE has finished. The benchmark kernels are the
+memory copy, matrix multiplication, 2-D convolution and Fast Fourier
+Transform (FFT) kernels of the original evaluation, which we refer to as
+memcpy, matmul, conv2d and FFT. Each of them partitions its data between the
+four PEs, and every run is checked against a golden result. In addition, each
+DCU carries hardware counters for the cycles in which it holds a core request
+(busy cycles), the cycles its first stage waits for a grant of the snoopy bus
+(snoop-stall cycles), the INV REQs it receives, and those among them that
+find a valid matching line to clear.
 
 % =============================================================================
 \section{Analysis of the Coherence Traffic}
@@ -258,28 +259,28 @@ clear.
 \subsection{Time Spent Waiting for the Snoopy Bus}
 
 We express the snoop-stall cycles of a DCU as a fraction of its busy cycles,
-i.e.\ the share of a core's cache time that goes to waiting for the bus. At a
-memory latency of two cycles this share is
-14.3\,\% on memcpy, 15.8\,\% on matmul, 6.5\,\% on conv2d and 5.8\,\% on FFT;
-at a memory latency of twenty it rises to 33.0\,\%, 32.9\,\%, 19.0\,\% and
-12.2\,\%, respectively. The share grows with the memory latency because, as
-shown in Section~\ref{sec:model}, each grant is held for longer. READ REQs
-withheld by the Invalidation Table under the MRSW invariant are not the
-cause: we counted them, and across all four kernels not a single READ REQ is
-withheld, so the waiting is due to the INV REQs alone.
+that is, as the share of a core's cache time that goes to waiting for the
+bus. At a memory latency of two cycles this share is 14.3\,\% on memcpy,
+15.8\,\% on matmul, 6.5\,\% on conv2d and 5.8\,\% on FFT. At a memory latency
+of twenty it rises to 33.0\,\%, 32.9\,\%, 19.0\,\% and 12.2\,\%,
+respectively. The share grows with the memory latency because each grant is
+held for longer, as will be shown in Section~\ref{sec:model}. One might
+suspect the READ REQs that the Invalidation Table withholds under the MRSW
+invariant. We counted them, and across all four kernels not a single
+READ REQ is withheld, so the waiting must be due to the INV REQs alone.
 
 \subsection{None of the Invalidation Requests Are Necessary}
 
-Each DCU therefore counts the INV REQs it receives and how many of them find a
-valid matching line to clear. We call an INV REQ useful if at least one other
-DCU clears a line because of it. The system issues 823{,}338 INV REQ
-broadcasts on matmul, 139{,}182 on conv2d, 61{,}683 on FFT and 24{,}618 on
-memcpy, more than one million in total, and the number of useful ones is zero
-on all four kernels. The counter is not at fault: on our coherence testbench
-of Section~\ref{sec:eval}, which shares data deliberately, it reports 345
-useful INV REQs out of 921. The zeros are a property of the kernels, which
-are data-parallel and partition their arrays between the PEs, so that
-essentially every written line belongs to exactly one PE.
+We therefore let each DCU count the INV REQs it receives and how many of them
+find a valid matching line to clear. We call an INV REQ useful if at least
+one other DCU clears a line because of it. The system issues 823{,}338
+INV REQ broadcasts on matmul, 139{,}182 on conv2d, 61{,}683 on FFT and
+24{,}618 on memcpy, more than a million in total, and on all four kernels the
+number of useful ones is zero. To make sure the counter itself works, we ran
+it on our coherence testbench of Section~\ref{sec:eval}, which shares data on
+purpose; there it reports 345 useful INV REQs out of 921. The zeros are thus
+a property of the kernels. They are data-parallel and partition their arrays
+between the PEs, so practically every written line belongs to one PE only.
 
 % =============================================================================
 \section{Proposed Snoop Filter}
@@ -288,20 +289,20 @@ essentially every written line belongs to exactly one PE.
 
 \subsection{Structure}
 
-Before granting an INV REQ, the bus has to answer one question: is there
-another DCU that has to receive it? The proposed snoop filter answers this
-question with a mirror of the tag and valid bits of all DCUs, kept inside the
-snoopy bus. The mirror is updated by the same two events that change the state
-of a DCU, a line fill, which writes a tag into a way and sets its valid bit,
-and an invalidation, which clears a valid bit. Each DCU exports these events
-on a small update port driven by the same signals that write its own
-Status-RAM and Tag-RAM, so the mirror cannot drift from the state it mirrors.
-For the INV REQ selected by the arbiter, the set index of its address reads
-one entry from every array, the stored tag is compared with the tag of the
-address and the result is ANDed with the valid bit; the two ways of each DCU
-are ORed and the requesting PE is excluded. Fig.~\ref{fig:filter} shows this
-path. A Bloom filter was rejected because removing entries from it requires
-exactly the information the mirror already has.
+Before it grants an INV REQ, the bus needs to know whether there is any other
+DCU that has to receive it. The proposed snoop filter answers this with a
+mirror of the tag and valid bits of all DCUs, kept inside the snoopy bus. Only
+two events change the state of a DCU: a line fill, which writes a tag into a
+way and sets its valid bit, and an invalidation, which clears a valid bit.
+Each DCU exports these two events on a small update port driven by the same
+signals that write its own Status-RAM and Tag-RAM, so the mirror cannot drift
+away from the state it mirrors. For the INV REQ selected by the arbiter, the
+set index of its address reads one entry from every array, the stored tag is
+compared with the tag of the address and the result is ANDed with the valid
+bit; the two ways of each DCU are ORed, and the requesting PE is excluded.
+This path is shown in Fig.~\ref{fig:filter}. We considered a Bloom filter as
+well, but removing entries from one needs the very information the mirror
+already holds.
 
 \begin{figure}[t]
 \centering
@@ -320,98 +321,100 @@ broadcast is suppressed.}
 \subsection{Cache Lines in Flight}
 \label{sec:fill}
 
-A mirror of the tag arrays is exact about which lines each DCU holds, and this
-turns out not to be the property the bus needs. A DCU that has issued a
-MEM READ REQ for a missing line and is waiting for the MEM RESP holds nothing
-for that line, so the line does not appear in the mirror. Nevertheless, this
-DCU is exactly the one that must receive an INV REQ for the line, because
-receiving it during this interval is what cancels the fill; if the broadcast
-were suppressed, the DCU would install a line that has already been
-invalidated. The property the bus needs is therefore residency \emph{or
-imminent residency}. Each DCU exports, in addition to its mirror updates, a
-signal indicating that a line fill is in progress together with its address,
-and the filter answers over the union of the mirror and these fill-in-flight
-signals. The fill signal is asserted from the cycle the MEM READ REQ is issued
-until the cycle the line is written into the cache, which is the cycle in
-which the mirror learns the new tag, so the line is covered in every cycle by
-one of the two. This is not merely a defensive measure: over ten randomized
-interleavings of our coherence testbench, 20 out of 2{,}241 granted INV REQs
-addressed a line that no other DCU held but one DCU was fetching, i.e.\ a
-broadcast that a mirror of resident lines alone would have suppressed
-wrongly.
+A mirror of the tag arrays tells the bus exactly which lines each DCU holds.
+This, however, is not quite the property the bus needs.
+Consider a DCU that has issued a MEM READ REQ for a missing line and is
+waiting for the MEM RESP. It holds nothing for that line yet, so the line does
+not appear in the mirror, and yet this DCU is precisely the one that must
+receive an INV REQ for the line, because receiving it during this interval is
+what cancels the fill. If the broadcast were suppressed, the DCU would install
+a line that has already been invalidated. What the bus needs is therefore
+residency \emph{or imminent residency}. Each DCU exports, in addition to its
+mirror updates, a signal indicating that a line fill is in progress together
+with its address, and the filter answers over the union of the mirror and
+these fill-in-flight signals. The fill signal stays asserted from the cycle
+the MEM READ REQ is issued until the cycle the line is written into the cache,
+which is also the cycle in which the mirror learns the new tag, so the line is
+covered at every moment by one of the two. This is not just a precaution. Over
+ten randomized interleavings of our coherence testbench, 20 out of 2{,}241
+granted INV REQs addressed a line that no other DCU held but one DCU was
+fetching, and a mirror of resident lines alone would have suppressed each of
+them wrongly.
 
 \subsection{Correctness of Suppression}
 
 When the filter reports that no other DCU holds the addressed line or is
-fetching it, a broadcast of the INV REQ could not clear a line anywhere, and
-not sending it is unobservable. This is the whole correctness argument.
-Everything else in the bus is unchanged: INV REQs that are needed are still
+fetching it, a broadcast of the INV REQ could not clear a line anywhere, so
+leaving it out cannot be observed. Everything
+else in the bus stays as it was: INV REQs that are needed are still
 arbitrated, broadcast and acknowledged as before, and the Invalidation Table
 still withholds READ REQs according to the MRSW invariant.
 
 \subsection{Cost Model}
 \label{sec:model}
 
-Here we derive from the bus protocol what suppressing a broadcast is worth,
-and check the derivation against the measurements. Let $P$ be the number of
-PEs, indexed by $i$ and $j$. For a WRITE REQ $w$ issued by PE $i$, let $a(w)$
-be the clock cycle in which $w$ enters the first stage of its DCU and $g(w)$
-the cycle in which the corresponding INV REQ is granted; let $\mathrm{arb}(t)$
-be the PE selected by the INV REQ arbiter in cycle $t$, and $r_j(t) = 1$ if the
-DCU of PE $j$ can accept an INV REQ in cycle $t$. The sharer set $S(w)$ is the
-set of PEs other than $i$ whose DCU holds or is fetching the line addressed by
-$w$. The original protocol grants an INV REQ in the first cycle in which the
-arbiter selects it \emph{and} every other DCU is ready to accept it:
+In this section we work out from the bus protocol what suppressing a
+broadcast is worth, and then check the result against the measurements. Let
+$P$ be the number of PEs, indexed by $i$ and $j$. For a WRITE REQ $w$ issued
+by PE $i$, let $a(w)$ be the clock cycle in which $w$ enters the first stage
+of its DCU and $g(w)$ the cycle in which the corresponding INV REQ is granted.
+Let $\mathrm{arb}(t)$ be the PE selected by the INV REQ arbiter in cycle $t$,
+and let $r_j(t) = 1$ if the DCU of PE $j$ can accept an INV REQ in cycle $t$.
+The sharer set $S(w)$ is the set of PEs other than $i$ whose DCU holds or is
+fetching the line addressed by $w$. The original protocol grants an INV REQ
+in the first cycle in which the arbiter selects it \emph{and} every other DCU
+is ready to accept it:
 \begin{equation}
 g(w) = \min\Big\{t \ge a(w) : \mathrm{arb}(t) = i \;\wedge\; \textstyle\bigwedge_{j \ne i} r_j(t)\Big\}.
 \label{eq:grant}
 \end{equation}
 A DCU is ready only while its first stage does not already hold an INV REQ,
-and an INV REQ leaves the first stage only when the second stage is free, which
-it is not for the full memory latency of any MEM READ REQ or MEM WRITE REQ in
-progress. On grant, one INV REQ is inserted into the first stage of each of the
-other $P{-}1$ DCUs, where it has priority over the local core, so the pipeline
-of each of them is delayed by one cycle if it had a core request to process.
-The cost of $w$ to the whole system is therefore
+and an INV REQ leaves the first stage only when the second stage is free. The
+second stage is busy for the full memory latency whenever a MEM READ REQ or
+MEM WRITE REQ is in progress. On grant, one INV REQ is inserted into the first
+stage of each of the other $P{-}1$ DCUs, where it takes priority over the
+local core, so each of those pipelines loses one cycle if it had a core
+request to process. The cost of $w$ to the whole system is therefore
 \begin{equation}
 C(w) = \big(g(w) - a(w)\big) + \sum_{j \ne i} \rho_j\big(g(w)\big),
 \label{eq:cost}
 \end{equation}
 where $\rho_j(t) \in \{0, 1\}$ is one if the DCU of PE $j$ had a core request
-to delay in cycle $t$. The conjunction in (\ref{eq:grant}) couples the
-pipelines of all PEs: a WRITE REQ on PE $i$ waits until a MEM READ REQ on PE
-$j$ has completed, whether or not the two PEs share any data, which is why the
+to delay in cycle $t$. The
+conjunction in (\ref{eq:grant}) ties the pipelines of all PEs together: a
+WRITE REQ on PE $i$ has to wait until a MEM READ REQ on PE $j$ has completed,
+whether or not the two PEs share any data at all. This is the reason why the
 snoop-stall share of Section~\ref{sec:measure} grows with the memory latency.
-Neither term of (\ref{eq:cost}) depends on which lines the caches hold.
+And neither term of (\ref{eq:cost}) depends on which lines the caches hold.
 
-The filter makes the cost depend on the cache state. With $S(w)$ read from the
-mirror, the grant condition becomes $\mathrm{arb}(t) = i \wedge \big(S(w) =
-\emptyset \vee \bigwedge\nolimits_{j \ne i} r_j(t)\big)$, and INV REQs are
-inserted into the other DCUs only when $S(w) \ne \emptyset$. For a WRITE REQ
-with an empty sharer set, both terms of (\ref{eq:cost}) vanish and only the
-arbitration wait remains, which is non-zero only when two PEs present a
-WRITE REQ in the same cycle. Summed over a kernel in which every WRITE REQ has
-an empty sharer set, the case Section~\ref{sec:measure} found for all four
-kernels, the saving is the whole coherence overhead minus the arbitration
-collisions, which is exactly the saving of an oracle that suppresses every
-broadcast.
+With the filter, the cost does depend on the cache state. When $S(w)$ is read
+from the mirror, the grant condition becomes $\mathrm{arb}(t) = i \wedge
+\big(S(w) = \emptyset \vee \bigwedge\nolimits_{j \ne i} r_j(t)\big)$, and
+INV REQs are inserted into the other DCUs only when $S(w) \ne \emptyset$. For
+a WRITE REQ with an empty sharer set, both terms of (\ref{eq:cost}) vanish
+and only the arbitration wait is left, which is non-zero only when two PEs
+present a WRITE REQ in the same cycle. If every WRITE REQ of a kernel has an
+empty sharer set, which is what Section~\ref{sec:measure} found for all four
+kernels, the saving over the whole kernel is the entire coherence overhead
+less the arbitration collisions. That is the same saving an oracle would
+obtain by suppressing every broadcast.
 
-Both terms of (\ref{eq:cost}) are observable, so the model can be checked
-rather than fitted: the snoop-stall cycles removed by the filter are the
-first term and a lower bound on the saving, and the same plus one cycle per
-broadcast received is an upper bound. Per DCU, at a memory latency of
-two, the measured saving lies inside this bracket on every kernel: matmul
+Both terms of (\ref{eq:cost}) can be observed, so the model can be checked
+rather than fitted. The snoop-stall cycles removed by the filter are the first
+term and give a lower bound on the saving; the same plus one cycle per
+broadcast received gives an upper bound. Per DCU, at a memory latency of two,
+the measured saving falls inside this bracket on every kernel: matmul
 $120{,}539 \le 243{,}100 \le 326{,}373$ cycles, conv2d $5{,}185 \le 13{,}795
 \le 39{,}980$, FFT $892 \le 4{,}865 \le 16{,}312$, memcpy $1{,}792 \le 2{,}302
 \le 7{,}946$.
 
 In hardware, the mirror is one memory array per (PE, way) pair, addressed by
-the set index. The tags are held outside any reset, since a tag is only
-compared when its valid bit is set, which lets them map to distributed RAM
-(LUTRAM); the valid bits are held in flip-flops, where they can be reset and
-read for all arrays at once. A first implementation that held both under an
-asynchronous reset was mapped by Vivado entirely to flip-flops, 11{,}776 of
-them and 3{,}202 LUTs, compared to 512 and 408 for this structure.
+the set index. The tags are kept outside any reset, because a tag is only
+compared when its valid bit is set, and this lets them map to distributed RAM
+(LUTRAM). The valid bits are kept in flip-flops, where they can be reset and
+read for all arrays at once. Our first implementation held both under an
+asynchronous reset, and Vivado mapped it entirely to flip-flops, 11{,}776 of
+them plus 3{,}202 LUTs, against 512 and 408 for the structure described here.
 
 % =============================================================================
 \section{Evaluation and Performance Analysis}
@@ -433,55 +436,55 @@ reordered so that its working set fits into the cache.}
 \input{tab_exec}
 
 Fig.~\ref{fig:exec} shows the execution time of the matmul, conv2d and FFT
-kernels for the problem sizes of the original evaluation, and
-Table~\ref{tab:exec} lists the cycle counts behind it. For matmul and conv2d,
-the cache extension reduces the execution time by approximately 40\,\% at
-every problem size, as in the original evaluation. The reduction does not
-decrease with the problem size because the data that
-has to stay resident is not the whole data set but the reuse footprint of the
-kernel, i.e.\ the bytes a core revisits before it moves on: one row of the
-second matrix for matmul, $4N$ bytes for an $N \times N$ matrix of 32-bit
-words, and the three-row sliding window of the input for conv2d, $12N$ bytes.
-At the largest problem size these are 512\,B and 1536\,B, both of which fit
-into the 2\,KiB DCU.
+kernels for the problem sizes used in the original evaluation, and
+Table~\ref{tab:exec} lists the cycle counts behind it. For matmul and conv2d
+the cache extension reduces the execution time by roughly 40\,\% at every
+problem size, as in the original evaluation. The reduction does not
+fall off with the problem size because what has to stay resident is not the
+whole data set but only the reuse footprint of the kernel, the bytes a core comes
+back to before moving on. For matmul this is one row of the
+second matrix, $4N$ bytes for an $N \times N$ matrix of 32-bit words; for
+conv2d it is the three-row sliding window of the input, $12N$ bytes. At the
+largest problem size these come to 512\,B and 1536\,B, and both fit into the
+2\,KiB DCU.
 
 For FFT this no longer holds. The original evaluation reports a uniform
-reduction of approximately 23\,\%. We match it at $N{=}256$ points, but the
-reduction disappears at $N{=}512$ and turns negative at $N{=}1024$, where the
-cache makes the kernel slower than having no cache. The reuse footprint
-explains this: the FFT revisits all $N$ complex points in every stage, i.e.\
-$8N$ bytes, which is 2\,KiB at $N{=}256$ and 8\,KiB at $N{=}1024$. At
-$N{=}512$, doubling the associativity at 2\,KiB recovers only 3.8\,\% of
-execution time whereas quadrupling the capacity recovers 24.5\,\%, so the
+reduction of about 23\,\%. We match it at $N{=}256$ points, but the reduction
+disappears at $N{=}512$ and becomes negative at $N{=}1024$, where the cache
+makes the kernel slower than having no cache. The reuse footprint explains
+this too. The FFT touches all $N$ complex points in every stage, $8N$
+bytes in total, which is 2\,KiB at $N{=}256$ and 8\,KiB at $N{=}1024$. At
+$N{=}512$, doubling the associativity at 2\,KiB recovers only 3.8\,\% of the
+execution time, whereas quadrupling the capacity recovers 24.5\,\%, so the
 cause is capacity. With an 8\,KiB DCU, FFT reproduces the original result at
-every size (24.8, 24.8 and 24.5\,\%); with the 2\,KiB stated in the original
-text it does not, so the reported result implies a larger cache or a smaller
-working set than described.
+every size (24.8, 24.8 and 24.5\,\%). With the 2\,KiB stated in the original
+text it does not, so the reported result implies either a larger cache or a
+smaller working set than described.
 
-The collapse is a property of the order in which the kernel accesses its data,
-and the fourth panel of Fig.~\ref{fig:exec} removes it in software. A radix-2
-butterfly in stage $s$ pairs elements $2^s$ positions apart; once $2^s$ is a
-multiple of a block size $B$, the remaining stages decompose into $B$
-independent transforms over strided columns. Running the early stages block
-by block and the late stages column by column keeps the working set inside the
-DCU with every butterfly computed on the same operands, so the output is
-bit-identical. At $N{=}1024$ the reduction achieved by the cache extension
-improves from $-4.3\,\%$ to $+10.4\,\%$, and to $18.2\,\%$ with the filter; at
-$N{=}256$ the additional loop structure costs about 6\,\%. The filter removes
-coherence traffic and not cache misses, so its contribution stays at seven to
-eight percentage points in both FFT panels.
+The collapse comes from the order in which the kernel accesses its data, and
+the fourth panel of Fig.~\ref{fig:exec} shows that it can be removed in
+software. A radix-2 butterfly in stage $s$ pairs elements $2^s$ positions
+apart; once $2^s$ is a multiple of a block size $B$, the remaining stages fall
+apart into $B$ independent transforms over strided columns. Running the early
+stages block by block and the late stages column by column keeps the working
+set inside the DCU, and since every butterfly still sees the same operands the
+output is bit-identical. At $N{=}1024$ the reduction obtained with the cache
+extension improves from $-4.3\,\%$ to $+10.4\,\%$, and to $18.2\,\%$ with the
+filter; at $N{=}256$ the extra loop structure costs about 6\,\%. The filter
+removes coherence traffic, not cache misses, so its contribution stays at
+seven to eight percentage points in both FFT panels.
 
-Relative to the coherent system without the filter, the filter improves the
+Compared with the coherent system without the filter, the filter improves the
 execution time by $1.222\times$ on matmul, $1.123\times$ on memcpy,
 $1.089\times$ on conv2d and $1.061\times$ on FFT, a geometric mean of
-$1.122\times$. We also compare against an oracle, a bus that suppresses every
-INV REQ broadcast unconditionally, which is sound to simulate only because
-none of the broadcasts are needed on these kernels. The filter reaches the
-oracle on every kernel, cycle for cycle, as the cost model of
-Section~\ref{sec:model} predicts. The snoop-stall counter confirms the
-mechanism: on conv2d it falls from 20{,}848 cycles to 109, and on memcpy from
-7{,}168 to 1; on FFT it falls only from 6{,}521 to 2{,}955, because the LR and
-SC requests used for synchronization still pass through the arbiters.
+$1.122\times$. We also compare against an oracle, that is, a bus that
+suppresses every INV REQ broadcast unconditionally. Simulating such a bus is
+only sound because none of the broadcasts are needed on these kernels. The
+filter reaches the oracle on every kernel, cycle for cycle, as the cost model
+of Section~\ref{sec:model} predicts. The snoop-stall counter confirms the
+mechanism. On conv2d it falls from 20{,}848 cycles to 109, and on memcpy from
+7{,}168 to 1. On FFT it falls only from 6{,}521 to 2{,}955, because the LR and
+SC requests used for synchronization still have to pass through the arbiters.
 
 \subsection{Memory Copy Latency}
 
@@ -495,45 +498,46 @@ reduction of the original evaluation appears between eight and twenty.}
 \label{fig:memcpy}
 \end{figure*}
 
-The memcpy kernel gives the most unexpected result. At a memory latency of two
-cycles, the coherent system with the cache extension is
+The memcpy kernel gave the most unexpected result. At a memory latency of
+two cycles, the coherent system with the cache extension is actually
 \emph{slower} than the non-coherent system without any cache, at $0.975\times$
 the speed of the baseline; with the filter it is $1.095\times$ faster. The
-slowdown is the cost of announcing private writes. Fig.~\ref{fig:memcpy} shows that this
-holds for every transfer size: for 4 to 32\,KiB the cache extension is between
-2.5\,\% and 7.6\,\% slower than the baseline, and the filter turns this into a
-gain of 8.2\,\% to 9.0\,\%. Raising the memory latency restores the result of
-the original evaluation, with a latency reduction of 34\,\% at a memory latency
-of eight and 56\,\% at twenty, against the approximately 50\,\% reported. A
-streaming kernel reuses no data, so when there is little memory latency to
-hide, only the coherence overhead remains.
+slowdown is the cost of announcing private writes. Fig.~\ref{fig:memcpy}
+shows that this holds for every transfer size. From 4 to 32\,KiB the cache
+extension is between 2.5\,\% and 7.6\,\% slower than the baseline, and the
+filter turns this into a gain of 8.2\,\% to 9.0\,\%. Raising the memory
+latency brings back the result of the original evaluation, with a latency
+reduction of 34\,\% at a memory latency of eight and 56\,\% at twenty,
+against the roughly 50\,\% reported there. A streaming kernel reuses no data,
+so when there is little memory latency to hide, only the coherence overhead
+is left.
 
 \subsection{Coherence Verification}
 
 The four benchmark kernels never exercise the case in which the filter has to
 let a broadcast through, so they cannot show that it is safe. Our coherence
-testbench does: it runs a producer/consumer exchange and a
-randomized four-core stress test over a small shared window, so that half of
-its INV REQs are useful, and with the filter enabled it passes 3{,}112
-checks, including a version-monotonicity check in which a core that has
-observed version $k$ of a location must never afterwards observe an older
-version, the symptom of a lost invalidation. The filter suppressed 282 of 921 broadcasts
-and delivered every one that was needed.
+testbench does. It runs a producer/consumer exchange and a randomized
+four-core stress test over a small shared window, so that half of its
+INV REQs are useful, and with the filter enabled it passes 3{,}112 checks.
+Among them is a version-monotonicity check: a core that has observed version
+$k$ of a location must never afterwards observe an older version, which is
+the symptom of a lost invalidation. The filter suppressed 282 of 921
+broadcasts and delivered every one that was needed.
 
 \subsection{Resource Utilization and Timing}
 
 \input{tab_hier}
 
-Table~\ref{tab:fpga} shows the post-place-and-route resource utilization
-with the filter, from Vivado 2025.1 for an AMD/Xilinx Zynq UltraScale+
-XCZU7EV at 60\,MHz, the clock frequency of the original design. The filter
-costs 1{,}064 look-up tables (LUTs) and 516 flip-flops over the coherent
-system without it, less than 4\,\% of that system, and no BRAM or DSP blocks.
-Both systems meet all timing constraints, with a worst negative slack of
-$+1.199$\,ns with the filter and $+1.265$\,ns without, so the filter costs
-66\,ps on a 16.667\,ns clock period. Both come from the same Vivado session,
-since separate runs of this design vary by up to 1.7\,ns in slack. At
-75\,MHz an earlier pair of builds had only the unfiltered system meeting
+Table~\ref{tab:fpga} gives the post-place-and-route resource utilization with
+the filter, obtained with Vivado 2025.1 for an AMD/Xilinx Zynq UltraScale+
+XCZU7EV at 60\,MHz, which is the clock frequency of the original design. The
+filter costs 1{,}064 look-up tables (LUTs) and 516 flip-flops on top of the
+coherent system without it, under 4\,\% of that system, and no BRAM or DSP
+blocks. Both systems meet all timing constraints, with a worst negative slack
+of $+1.199$\,ns with the filter and $+1.265$\,ns without, so the filter costs
+66\,ps on a 16.667\,ns clock period. Both numbers come from the same Vivado
+session, because separate runs of this design vary by up to 1.7\,ns in slack.
+At 75\,MHz an earlier pair of builds had only the unfiltered system meeting
 timing, on a path that is 86\,\% routing delay, so we evaluate at 60\,MHz.
 
 % =============================================================================
@@ -541,29 +545,28 @@ timing, on a path that is 86\,\% routing delay, so we evaluate at 60\,MHz.
 \label{sec:rejected}
 % =============================================================================
 
-The mirror knows not only \emph{whether} another DCU holds the line but
-\emph{which} ones do, so the bus could deliver the INV REQ only to the members
-of $S(w)$ and wait only for their readiness. On a stencil kernel in which each
-PE updates a band of rows and exchanges the boundary rows with its
-neighbours, it delivers 168 INV REQs, all useful, but improves execution time
-by only 0.1\,\% to 0.3\,\%: once
-suppression has removed every WRITE REQ with an empty sharer set, the
-remaining cost in (\ref{eq:cost}) belongs to writes that some other DCU has to
-be told about.
+Since the mirror knows not only \emph{whether} another DCU holds the line but
+also \emph{which} ones do, the bus could deliver the INV REQ only to the
+members of $S(w)$ and wait only for those. We tried this on a stencil kernel
+in which each PE updates a band of rows and exchanges the boundary rows with
+its neighbours. It delivers 168 INV REQs, all of them useful, but the
+execution time improves by only 0.1\,\% to 0.3\,\%. Once suppression has
+removed every WRITE REQ with an empty sharer set, whatever cost is left in
+(\ref{eq:cost}) belongs to writes that some other DCU has to be told about.
 
 % =============================================================================
 \section{Limitations}
 \label{sec:threats}
 % =============================================================================
 
-That none of the invalidation traffic is useful is a property of the
-workloads as much as of the design; we claim it only for the kernels of the
-original evaluation. The stencil
-kernel of Section~\ref{sec:rejected} shares data, and the filter is still
-worth $1.11\times$ on it at a memory latency of twenty.
-Results come from RTL simulation and post-place-and-route reports; no
-bitstream has been run on a board, and power is not reported because Vivado's
-vectorless estimate treats the design as idle.
+That none of the invalidation traffic is useful says as much about the
+workloads as about the design, and we claim it only for the kernels of the
+original evaluation. The stencil kernel of Section~\ref{sec:rejected} does
+share data, and even there the filter is worth $1.11\times$ at a memory
+latency of twenty. All results come from RTL simulation and
+post-place-and-route reports; no bitstream has been run on a board, and we do
+not report power because Vivado's vectorless estimate treats the design as
+idle.
 
 % =============================================================================
 \section{Conclusion}
@@ -571,10 +574,10 @@ vectorless estimate treats the design as idle.
 % =============================================================================
 
 On the benchmark kernels of its own evaluation, the seamless cache extension
-reproduced here spends between 6\,\% and 33\,\% of each core's cache time on
+we reproduced spends 6\,\% to 33\,\% of each core's cache time on
 invalidation requests that invalidate nothing. An exact snoop filter, a
 mirror of the tag and valid bits of all DCUs that also covers lines being
-fetched, suppresses this traffic for 1{,}064 LUTs and is worth $1.122\times$.
+fetched, removes this traffic for 1{,}064 LUTs and is worth $1.122\times$.
 
 \ifanon
 \else
