@@ -126,8 +126,8 @@ The rest of the paper is structured as follows. Section~\ref{sec:related}
 discusses related work, Section~\ref{sec:design} describes the cache extension
 under study, and Section~\ref{sec:measure} analyzes its coherence traffic. The
 snoop filter is presented in Section~\ref{sec:filter} and evaluated in
-Section~\ref{sec:eval}; Sections~\ref{sec:rejected} to~\ref{sec:concl} cover
-directed invalidation, the limitations of this study, and the conclusion.
+Section~\ref{sec:eval}. Section~\ref{sec:rejected} reports on directed
+invalidation, and Section~\ref{sec:concl} concludes the paper.
 
 % =============================================================================
 \section{Related Work}
@@ -553,20 +553,8 @@ its neighbours. It delivers 168 INV REQs, all of them useful, but the
 execution time improves by only 0.1\,\% to 0.3\,\%. Once suppression has
 removed every WRITE REQ with an empty sharer set, whatever cost is left in
 (\ref{eq:cost}) belongs to writes that some other DCU has to be told about.
-
-% =============================================================================
-\section{Limitations}
-\label{sec:threats}
-% =============================================================================
-
-That none of the invalidation traffic is useful says as much about the
-workloads as about the design, and we claim it only for the kernels of the
-original evaluation. The stencil kernel of Section~\ref{sec:rejected} does
-share data, and even there the filter is worth $1.11\times$ at a memory
-latency of twenty. All results come from RTL simulation and
-post-place-and-route reports; no bitstream has been run on a board, and we do
-not report power because Vivado's vectorless estimate treats the design as
-idle.
+Even on this kernel, which does share data, suppression alone is worth
+$1.11\times$ at a memory latency of twenty.
 
 % =============================================================================
 \section{Conclusion}
