@@ -242,13 +242,23 @@ memory.
 
 \subsection{Snoopy Bus}
 
+The unit of coherence is the cache line, the same 16 bytes the DCU allocates
+and refills. An INV REQ carries a line address, the receiving DCU compares it
+against its tags at line granularity, and the screening described below works
+at the same granularity, so two PEs writing different words of one line are
+treated as sharing it.
+
 The snoopy bus consists of two Round Robin (RR) arbiters, an Invalidation Table
 and a Link Register. The first arbiter, which we call the INV REQ arbiter
 from here on, arbitrates the INV REQs of all PEs and grants at most one per
 clock cycle. When an INV REQ is granted, its address is broadcast to the DCUs
 of all other PEs, which clear the addressed line if they hold it. The grant is
 withheld until every other DCU is able to accept the broadcast, so that no
-invalidation can be lost. The second arbiter handles the atomic Load-Reserved
+invalidation can be lost. This last rule is the one the rest of the paper
+turns on. It couples the DCUs to each other: what a write costs is decided by
+what every other DCU happens to be doing at that moment, and not by what any
+cache actually holds, so the protocol charges the same price for a write that
+nobody else cares about as for one that everybody has to hear. The second arbiter handles the atomic Load-Reserved
 (LR) and Store-Conditional (SC) requests together with the Link Register. The
 bus also guarantees a Multiple-Readers-Single-Writer (MRSW) invariant: plain
 READ REQs are not arbitrated, but while a core has an INV REQ pending for a
@@ -267,8 +277,11 @@ sources by changing one parameter; it serves as the baseline for all
 comparisons. The shared memories are modelled with a configurable access
 latency, which we call the memory latency from here on. It is the number of
 clock cycles between the acceptance of a MEM READ REQ and the first data beat
-of its MEM RESP. Two cycles corresponds to on-chip block RAM (BRAM), as in the
-original design; eight and twenty cycles stand for off-chip memories.
+of its MEM RESP. We use three synthetic settings of it. Two cycles corresponds to the
+on-chip block RAM (BRAM) of the original design, while eight and twenty cycles
+are higher-latency configurations representative of off-chip access classes;
+we did not implement an off-chip memory controller, and these figures are not
+a model of one.
 
 Execution time is read from the cycle counter of the cores as the number of
 clock cycles until the slowest PE has finished. The benchmark kernels are the
