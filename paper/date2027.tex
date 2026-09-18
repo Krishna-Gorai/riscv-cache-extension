@@ -12,9 +12,13 @@
 %%  Style rule for this file (2026-09-13): written in the register of the
 %%  reference paper. Every abbreviation and every symbol is defined at first
 %%  use, headings are descriptive, and each result is followed by its reason.
-%%  Budget: ~4,650 source words between \begin{abstract} and \newpage; body
-%%  ends on page 6, page 7 holds references only. Check with
+%%  Page budget: DATE allows 6 pages + 1 extra page for references ONLY. The
+%%  draft is deliberately over that while the guide's review points are being
+%%  worked through (2026-09-18: author said to ignore the limit for now). It
+%%  MUST be brought back before submission; check with
 %%    pdftotext -f 7 -l 7 date2027.pdf - | head -1     (must be REFERENCES)
+%%  The cheapest single cut, measured, is Fig. 4 (memcpy latency): dropping it
+%%  alone took the body back inside 6 pages with nothing else touched.
 %% =============================================================================
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
@@ -119,46 +123,69 @@ as follows:
 \begin{itemize}
   \item We measure how much of the coherence traffic of the cache extension
         is necessary, and what the rest costs (Section~\ref{sec:measure}).
-  \item We propose an exact snoop filter, a structural mirror of the tag and
-        valid bits of all DCUs that also covers lines being fetched, and give
-        a cost model of the bus protocol that explains its benefit
+  \item We propose an exact source-side snoop filter that feeds cache
+        residency and fill-in-flight information directly into the
+        arbitration of the snoopy bus, so that an unnecessary invalidation
+        request is suppressed before it is serialized across the system. A
+        cost model of the bus protocol explains where its benefit comes from
         (Section~\ref{sec:filter}).
   \item We evaluate the filter in execution time, coherence correctness and
         FPGA resources, and measure directed invalidation as a possible next
         step (Sections~\ref{sec:eval} and~\ref{sec:rejected}).
 \end{itemize}
 
-The rest of the paper is structured as follows. Section~\ref{sec:related}
-discusses related work, Section~\ref{sec:design} describes the cache extension
-under study, and Section~\ref{sec:measure} analyzes its coherence traffic. The
-snoop filter is presented in Section~\ref{sec:filter} and evaluated in
-Section~\ref{sec:eval}. Section~\ref{sec:rejected} reports on directed
-invalidation, and Section~\ref{sec:concl} concludes the paper.
+The rest of the paper is structured as follows.
+Section~\ref{sec:related} discusses related work, Section~\ref{sec:design}
+describes the cache extension under study, and Section~\ref{sec:measure}
+analyzes its coherence traffic. The snoop filter is presented in
+Section~\ref{sec:filter} and evaluated in Section~\ref{sec:eval}.
+Section~\ref{sec:rejected} reports on directed invalidation, and
+Section~\ref{sec:concl} concludes the paper.
 
 % =============================================================================
 \section{Related Work}
 \label{sec:related}
 % =============================================================================
 
-Snoop filtering itself is not new. JETTY~\cite{jetty} places a small filter on
-the receiving side of the bus and uses it to skip the snoops that would miss
-in a processor's cache anyway, so that the energy of a tag lookup is not spent
-on them. Coarse-grain
-coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout} track the
-sharing state of large regions of memory instead, so that a region known to
-be unshared needs no broadcast at all.
+Snoop filtering itself is not new, and we do not claim it as our
+contribution. JETTY~\cite{jetty} places a small filter in front of each
+receiving cache and uses it to skip the snoops that would miss there anyway,
+so that the energy of a tag lookup is not spent on them. Coarse-grain
+coherence tracking~\cite{cgct} and RegionScout~\cite{regionscout} work at a
+larger granularity: they track the sharing state of regions of hundreds or
+thousands of bytes, and a region that is known to be unshared needs no
+broadcast at all. All three were designed for SMP servers and large chip
+multiprocessors, where the cost of a useless snoop is the energy and the
+bandwidth of the remote tag lookups. In that setting an approximate answer is
+good enough, because the error can be made one-sided: a filter that claims a
+line may be held when it is not merely causes a lookup that would have
+happened anyway.
 
-In a bus-based soft multi-core system, the cost that matters is a different
-one. An unnecessary invalidation is expensive not because of the energy of the
-remote tag lookups but because of the serialization it causes. Only one
-invalidation is granted per clock cycle in the whole system, and the grant is
-held back until every other cache is ready to accept it. For this reason we
-place the filter at the source of the request, where it can decide whether to
-arbitrate at all, and because the caches are small we can afford an exact copy
-of their tag arrays. The coherent RISC-V fabrics mentioned above are complete
-memory systems, whereas the design studied here is an extension attached to an
-unmodified core through its existing memory port, which is what confines its
-coherence traffic to a single shared bus.
+The bus studied here charges for a useless invalidation in a different
+currency. Only one invalidation is granted per clock cycle in the whole
+system, and the grant is held back until every other cache is ready to accept
+it, so the expense is the serialization imposed on every core rather than the
+lookups performed by any one of them. Three consequences follow, and together
+they are what distinguishes this work; Table~\ref{tab:related} summarizes
+them. First, the filter has to sit at the source of the request and take part
+in the arbitration decision, since a filter at the receiver cannot prevent a
+request from being serialized. Second, it has to be exact rather than
+conservative: it decides whether to arbitrate at all, so a false positive is
+not a wasted lookup but a lost opportunity, and exactness also lets the same
+structure answer \emph{which} caches hold the line, which we use in
+Section~\ref{sec:rejected}. Being exact is affordable because the caches of
+such a system are small. Third, a source-side filter must know about the line
+fills that are in flight, a question that does not arise at the receiving
+side, where the cache is aware of its own pending fill; Section~\ref{sec:fill}
+shows that ignoring it loses invalidations.
+
+\input{tab_related}
+
+Coherent fabrics for RISC-V such as TileLink~\cite{tilelink},
+OpenPiton~\cite{openpiton} and CIFER~\cite{cifer} solve the coherence problem
+at a different scale, as complete memory systems. The design studied here is
+an extension attached to an unmodified core through its existing memory port,
+and that is what confines its coherence traffic to a single shared bus.
 
 % =============================================================================
 \section{The Cache Extension Under Study}
@@ -175,9 +202,8 @@ PE~0; the signal names are those of Section~\ref{sec:design}.}
 \label{fig:arch}
 \end{figure*}
 
-In this section we describe the cache extension of~\cite{kamaleldin2024} as
-far as is needed to follow the measurements, keeping to the terminology of
-the original paper.
+We describe the cache extension of~\cite{kamaleldin2024} as far as is needed
+to follow the measurements, keeping to the terminology of the original paper.
 
 \subsection{Multi-core RISC-V Architecture}
 
@@ -198,20 +224,19 @@ to the shared data memory, and a write that misses does not install a line.
 Requests are processed in two sequential pipeline stages. The first stage
 accepts a request either from the local core, which can be a read request
 (READ REQ) or a write request (WRITE REQ), or from the snoopy bus, which can
-only be an invalidation request (INV REQ). For a core request, the first
-stage reads the valid bit from the Status-RAM and the tag from the Tag-RAM,
-and at the same time it forwards the request to the snoopy bus (a WRITE REQ
-is forwarded as an INV REQ). In the second stage the Hit Check Logic (HCL)
-decides between hit and miss and the Cache Control Logic (CCL) acts on the
-request. A READ REQ that misses issues a memory read request (MEM READ REQ)
-and fills the LRU way of the set with the returned line; a WRITE REQ is
-forwarded as a memory write request (MEM WRITE REQ); an INV REQ clears the
-valid bit of the addressed line if the line is resident. An INV REQ has
-priority over the local core. If it arrives while a core request occupies
-the first stage, that request is moved into a holding register and presented
-again once the INV REQ has moved on. A Stall Control Logic (SCL) stalls the
-first stage until the bus grants its forwarded request, and the second stage
-until the response (MEM RESP) of a MEM READ REQ or the grant of a
+only be an invalidation request (INV REQ). For a core request it reads the
+valid bit from the Status-RAM and the tag from the Tag-RAM, and at the same
+time forwards the request to the snoopy bus, a WRITE REQ as an INV REQ. In
+the second stage the Hit Check Logic (HCL) decides between hit and miss and
+the Cache Control Logic (CCL) acts on the request: a READ REQ that misses
+issues a memory read request (MEM READ REQ) and fills the LRU way of the set
+with the returned line, a WRITE REQ becomes a memory write request
+(MEM WRITE REQ), and an INV REQ clears the valid bit of the addressed line if
+it is resident. An INV REQ has priority over the local core; a core request
+that occupies the first stage when one arrives is moved into a holding
+register and presented again afterwards. A Stall Control Logic (SCL) stalls
+the first stage until the bus grants its forwarded request, and the second
+stage until the response (MEM RESP) of a MEM READ REQ or the grant of a
 MEM WRITE REQ arrives, that is, for the access latency of the shared data
 memory.
 
@@ -225,10 +250,10 @@ of all other PEs, which clear the addressed line if they hold it. The grant is
 withheld until every other DCU is able to accept the broadcast, so that no
 invalidation can be lost. The second arbiter handles the atomic Load-Reserved
 (LR) and Store-Conditional (SC) requests together with the Link Register. The
-bus also guarantees a Multiple-Readers-Single-Writer (MRSW) invariant. Plain
+bus also guarantees a Multiple-Readers-Single-Writer (MRSW) invariant: plain
 READ REQs are not arbitrated, but while a core has an INV REQ pending for a
-line, which is recorded in the Invalidation Table, a READ REQ of another core
-to the same line is withheld until the INV REQ has been granted.
+line, recorded in the Invalidation Table, a READ REQ of another core to that
+line is withheld until the INV REQ is granted.
 
 \subsection{Reproduction and Experimental Setup}
 
@@ -263,11 +288,11 @@ find a valid matching line to clear.
 
 \subsection{Time Spent Waiting for the Snoopy Bus}
 
-We express the snoop-stall cycles of a DCU as a fraction of its busy cycles.
-We call this the cache busy time of the core: it is the time the core spends
-with an access in its DCU, and not its total execution time, which also
-includes everything the core does without touching the cache. At a memory
-latency of two cycles this share is 14.3\,\% on memcpy,
+We express the snoop-stall cycles of a DCU as a fraction of its busy cycles,
+that is, of the time the core spends with an access in its cache. We call this
+its cache busy time; it is not the total execution time, which also covers
+everything the core does without touching the cache. At a memory latency of
+two cycles the share is 14.3\,\% on memcpy,
 15.8\,\% on matmul, 6.5\,\% on conv2d and 5.8\,\% on FFT. At a memory latency
 of twenty it rises to 33.0\,\%, 32.9\,\%, 19.0\,\% and 12.2\,\%,
 respectively. The share grows with the memory latency because each grant is
@@ -307,9 +332,10 @@ away from the state it mirrors. For the INV REQ selected by the arbiter, the
 set index of its address reads one entry from every array, the stored tag is
 compared with the tag of the address and the result is ANDed with the valid
 bit; the two ways of each DCU are ORed, and the requesting PE is excluded.
-This path is shown in Fig.~\ref{fig:filter}. We considered a Bloom filter as
-well, but removing entries from one needs the very information the mirror
-already holds.
+This path is shown in Fig.~\ref{fig:filter}. A hashed structure such as a
+Bloom filter would be smaller, but it can only over-approximate the set of
+resident lines, and removing an entry from one needs exactly the information
+the mirror already holds.
 
 \begin{figure}[t]
 \centering
@@ -324,15 +350,14 @@ The fill comparator is shaded; it is the term of Section~\ref{sec:fill}.}
 \subsection{Cache Lines in Flight}
 \label{sec:fill}
 
-A mirror of the tag arrays tells the bus exactly which lines each DCU holds.
-This, however, is not quite the property the bus needs.
-Consider a DCU that has issued a MEM READ REQ for a missing line and is
-waiting for the MEM RESP. It holds nothing for that line yet, so the line does
-not appear in the mirror, and yet this DCU is precisely the one that must
-receive an INV REQ for the line, because receiving it during this interval is
-what cancels the fill. If the broadcast were suppressed, the DCU would install
-a line that has already been invalidated. What the bus needs is therefore
-residency \emph{or imminent residency}. Each DCU exports, in addition to its
+A mirror of the tag arrays tells the bus which lines each DCU holds, but that
+is not quite the property the bus needs. Consider a DCU that has issued a
+MEM READ REQ for a missing line and is waiting for the MEM RESP. It holds
+nothing for that line yet, so the line does not appear in the mirror, and yet
+this DCU is precisely the one that must receive an INV REQ for it, because
+receiving it during this interval is what cancels the fill. Suppress the
+broadcast and the DCU installs a line that has already been invalidated. What
+the bus needs is therefore residency \emph{or imminent residency}. Each DCU exports, in addition to its
 mirror updates, a signal indicating that a line fill is in progress together
 with its address, and the filter answers over the union of the mirror and
 these fill-in-flight signals. The fill signal stays asserted from the cycle
@@ -372,12 +397,12 @@ g(w) = \min\Big\{t \ge a(w) : \mathrm{arb}(t) = i \;\wedge\; \textstyle\bigwedge
 \label{eq:grant}
 \end{equation}
 A DCU is ready only while its first stage does not already hold an INV REQ,
-and an INV REQ leaves the first stage only when the second stage is free. The
-second stage is busy for the full memory latency whenever a MEM READ REQ or
-MEM WRITE REQ is in progress. On grant, one INV REQ is inserted into the first
-stage of each of the other $P{-}1$ DCUs, where it takes priority over the
-local core, so each of those pipelines loses one cycle if it had a core
-request to process. The cost of $w$ to the whole system is therefore
+and an INV REQ leaves that stage only when the second one is free, which it is
+not for the full memory latency of any MEM READ REQ or MEM WRITE REQ in
+progress. On grant, an INV REQ is inserted into the first stage of each of the
+other $P{-}1$ DCUs, where it takes priority over the local core, so each of
+those pipelines loses a cycle if it had a core request to process. The cost of
+$w$ to the whole system is therefore
 \begin{equation}
 C(w) = \big(g(w) - a(w)\big) + \sum_{j \ne i} \rho_j\big(g(w)\big),
 \label{eq:cost}
@@ -469,13 +494,13 @@ the fourth panel of Fig.~\ref{fig:exec} shows that it can be removed in
 software. A radix-2 butterfly in stage $s$ pairs elements $2^s$ positions
 apart; once $2^s$ is a multiple of a block size $B$, the remaining stages fall
 apart into $B$ independent transforms over strided columns. Running the early
-stages block by block and the late stages column by column keeps the working
-set inside the DCU, and since every butterfly still sees the same operands the
-output is bit-identical. At $N{=}1024$ the reduction obtained with the cache
-extension improves from $-4.3\,\%$ to $+10.4\,\%$, and to $18.2\,\%$ with the
-filter; at $N{=}256$ the extra loop structure costs about 6\,\%. The filter
-removes coherence traffic, not cache misses, so its contribution stays at
-seven to eight percentage points in both FFT panels.
+stages block by block and the late ones column by column keeps the working set
+inside the DCU, and every butterfly still sees the same operands, so the
+output is bit-identical. At $N{=}1024$ the reduction improves from
+$-4.3\,\%$ to $+10.4\,\%$, and to $18.2\,\%$ with the filter; at $N{=}256$ the
+extra loop structure costs about 6\,\%. The filter removes coherence traffic,
+not cache misses, so its contribution stays at seven to eight percentage
+points in both FFT panels.
 
 Compared with the coherent system without the filter, the filter improves the
 execution time by $1.222\times$ on matmul, $1.123\times$ on memcpy,
@@ -502,13 +527,13 @@ reduction of the original evaluation appears between eight and twenty.}
 \end{figure*}
 
 The memcpy kernel gave the most unexpected result. At a memory latency of
-two cycles, the coherent system with the cache extension is actually
+two cycles the coherent system with the cache extension is actually
 \emph{slower} than the non-coherent system without any cache, at $0.975\times$
 the speed of the baseline; with the filter it is $1.095\times$ faster. The
-slowdown is the cost of announcing private writes. Fig.~\ref{fig:memcpy}
-shows that this holds for every transfer size. From 4 to 32\,KiB the cache
-extension is between 2.5\,\% and 7.6\,\% slower than the baseline, and the
-filter turns this into a gain of 8.2\,\% to 9.0\,\%. Raising the memory
+slowdown is the cost of announcing private writes, and Fig.~\ref{fig:memcpy}
+shows that it holds at every transfer size: from 4 to 32\,KiB the cache
+extension is 2.5\,\% to 7.6\,\% slower than the baseline, and the filter turns
+that into a gain of 8.2\,\% to 9.0\,\%. Raising the memory
 latency brings back the result of the original evaluation, with a latency
 reduction of 34\,\% at a memory latency of eight and 56\,\% at twenty,
 against the roughly 50\,\% reported there. A streaming kernel reuses no data,
@@ -536,8 +561,8 @@ the filter, obtained with Vivado 2025.1 for an AMD/Xilinx Zynq UltraScale+
 XCZU7EV at 60\,MHz, which is the clock frequency of the original design. The
 filter costs 1{,}064 look-up tables (LUTs) and 516 flip-flops on top of the
 coherent system without it, under 4\,\% of that system, and no BRAM or DSP
-blocks. Both systems meet all timing constraints, with a worst negative slack
-of $+1.199$\,ns with the filter and $+1.265$\,ns without, so the filter costs
+blocks. Both systems meet all timing constraints, at $+1.199$\,ns of worst
+negative slack with the filter and $+1.265$\,ns without, so the filter costs
 66\,ps on a 16.667\,ns clock period. Both numbers come from the same Vivado
 session, because separate runs of this design vary by up to 1.7\,ns in slack.
 At 75\,MHz an earlier pair of builds had only the unfiltered system meeting

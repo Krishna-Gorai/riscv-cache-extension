@@ -82,7 +82,7 @@ def main():
     else:
         fig, axes = plt.subplots(1, len(panels),
                                  figsize=(7.16, 2.15) if len(panels) == 2
-                                 else (7.16, 1.38))
+                                 else (7.16, 1.6))
 
     for ax, (lat, title) in zip(axes, panels):
         for cfg, label, colour, marker, ls in series:

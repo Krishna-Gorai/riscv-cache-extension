@@ -1,0 +1,31 @@
+%% Comparison against the snoop-filtering literature, on the axes that matter
+%% for this bus. Added 2026-09-18 on the reviewer's request: the related-work
+%% prose said what is different, but a reader had to assemble it themselves.
+%%
+%% "Saves arbitration" is the column that separates this work from the rest:
+%% a filter at the receiving side cannot prevent a request from being
+%% serialized, because by then the grant has already been taken.
+\begin{table}[t]
+\caption{Snoop filtering in the literature and in this work, on the axes that
+matter for a bus whose dominant cost is serialization.}
+\label{tab:related}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+ & Exact & Source & In-flight & Saves & Core \\
+ &       & side   & fills     & arb.\  & change \\
+\midrule
+JETTY~\cite{jetty}                  & no  & no  & n/a & no  & no \\
+CGCT~\cite{cgct}, RegionScout~\cite{regionscout}
+                                    & no  & yes & no  & no  & no \\
+Coherent fabrics~\cite{tilelink,openpiton,cifer}
+                                    & yes & ---  & --- & --- & yes \\
+Cache extension~\cite{kamaleldin2024}
+                                    & \multicolumn{4}{c}{no filter} & no \\
+\textbf{This work}                  & \textbf{yes} & \textbf{yes} & \textbf{yes}
+                                    & \textbf{yes} & \textbf{no} \\
+\bottomrule
+\end{tabular}
+\end{table}
