@@ -485,4 +485,24 @@ module tb_coherent_subsystem;
     $fatal(1);
   end
 
+  // ---------------------------------------------------------------------------
+  //  Assertion checker for the snoop filter (tb/sva/filter_sva.sv). Compiled in
+  //  with -d FILTER_SVA, and only meaningful when the filter is built, since
+  //  its properties read the mirror.
+  // ---------------------------------------------------------------------------
+`ifdef FILTER_SVA
+  if (UseFilter) begin : g_sva
+    filter_sva #(
+      .NumCores (NumCores),
+      .NumWays  (NumWays),
+      .NumSets  (NumSets),
+      .AddrW    (AddrW),
+      .OffsW    ($clog2(LineBytes))
+    ) u_sva (
+      .clk_i  (clk),
+      .rst_ni (rst_n)
+    );
+  end
+`endif
+
 endmodule

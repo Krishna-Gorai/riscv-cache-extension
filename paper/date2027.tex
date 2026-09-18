@@ -351,8 +351,10 @@ mirror of the tag and valid bits of all DCUs, kept inside the snoopy bus. Only
 two events change the state of a DCU: a line fill, which writes a tag into a
 way and sets its valid bit, and an invalidation, which clears a valid bit.
 Each DCU exports these two events on a small update port driven by the same
-signals that write its own Status-RAM and Tag-RAM, so the mirror cannot drift
-away from the state it mirrors. For the INV REQ selected by the arbiter, the
+signals that write its own Status-RAM and Tag-RAM, which keeps the mirror
+synchronized with the cache state. Section~\ref{sec:sva} checks that
+synchronization as an assertion rather than leaving it as a claim. For the
+INV REQ selected by the arbiter, the
 set index of its address reads one entry from every array, the stored tag is
 compared with the tag of the address and the result is ANDed with the valid
 bit; the two ways of each DCU are ORed, and the requesting PE is excluded.
@@ -374,8 +376,11 @@ The fill comparator is shaded; it is the term of Section~\ref{sec:fill}.}
 \subsection{Cache Lines in Flight}
 \label{sec:fill}
 
-A mirror of the tag arrays tells the bus which lines each DCU holds, but that
-is not quite the property the bus needs. Consider a DCU that has issued a
+A mirror of the tag arrays answers the question \emph{does another cache hold
+this line?} The question the bus actually has to ask is \emph{does another
+cache hold this line, or is it about to hold it because it is fetching it?}
+The difference between the two is small enough to overlook and large enough to
+break coherence. Consider a DCU that has issued a
 MEM READ REQ for a missing line and is waiting for the MEM RESP. It holds
 nothing for that line yet, so the line does not appear in the mirror, and yet
 this DCU is precisely the one that must receive an INV REQ for it, because
@@ -401,6 +406,32 @@ leaving it out cannot be observed. Everything
 else in the bus stays as it was: INV REQs that are needed are still
 arbitrated, broadcast and acknowledged as before, and the Invalidation Table
 still withholds READ REQs according to the MRSW invariant.
+
+\subsection{Checking the Properties}
+\label{sec:sva}
+
+The argument above rests on two claims: that the mirror agrees with the caches,
+and that a suppressed invalidation was one that no other DCU needed. A counter
+that fires 20 times in 2{,}241 grants shows that a case was reached; it says
+nothing about the cycles in which it was not. We therefore wrote both claims as
+assertions and let them check every cycle of every run. They are stated against
+the DCUs' own Status-RAM, Tag-RAM and fill state rather than against the
+filter's outputs, which would be circular:
+\begin{itemize}
+  \item[P1] every entry of the mirror equals the corresponding entry of that
+        DCU's arrays, in the valid bit and, where valid, in the tag;
+  \item[P2] when the bus grants an INV REQ without broadcasting it, no other
+        DCU holds the addressed line;
+  \item[P3] the same, for a DCU that holds nothing yet but is fetching it.
+\end{itemize}
+P1 is the meaning of the word exact, and P3 is the property a mirror of
+committed tags alone violates. Over ten randomized interleavings the
+properties held in every cycle: 81{,}734 cycles in total, 923 suppressions
+checked against the real cache state, and 78{,}336 mirror entries compared,
+each entry of the mirror being visited 153 times. These are assertions checked
+in simulation and not a proof; they are written so that they can also be
+discharged by bounded model checking, which is the obvious next step for a
+filter that claims to be exact.
 
 \subsection{Cost Model}
 \label{sec:model}

@@ -90,6 +90,7 @@ $srcs = @(
   "$root\tb\models\shared_mem_model.sv",
   "$root\tb\unit\tb_dcu.sv",
   "$root\tb\unit\tb_axi.sv",
+  "$root\tb\sva\filter_sva.sv",
   "$root\tb\system\tb_coherent_subsystem.sv",
   "$root\tb\system\tb_pe.sv",
   "$root\tb\system\tb_soc.sv",

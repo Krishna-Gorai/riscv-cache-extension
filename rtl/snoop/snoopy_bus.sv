@@ -238,8 +238,15 @@ module snoopy_bus
 
   always @(*) begin
     for (int unsigned c = 0; c < NumCores; c++) begin
+`ifdef NO_FILL_TERM
+      // Deliberately unsound: the committed-tag mirror of the first design,
+      // kept behind a define so that the assertions of tb/sva/filter_sva.sv can
+      // be shown to fail on it. Never define this in a real build.
+      filling_line[c] = 1'b0;
+`else
       filling_line[c] = fill_busy_i[c] &&
                         same_line(fill_addr_i[c*AddrW +: AddrW], win_addr);
+`endif
     end
   end
 
