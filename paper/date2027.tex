@@ -64,9 +64,14 @@ cache busy time is spent waiting for the snoopy bus in this way, and for a
 streaming kernel the overhead is larger than the benefit of the cache. We propose a snoop filter that keeps
 a copy of the tag and valid bits of every data cache unit inside the snoopy
 bus, so that the bus can suppress an invalidation request when no other cache
-holds the addressed line or is fetching it. A cost model of the bus protocol
-explains where the saving comes from. The filter is evaluated in terms of
-execution time, coherence correctness and FPGA resource utilization.
+holds the addressed line or is fetching it. Conventional snoop filters sit at
+the receiving cache and work from approximate or coarse-grained sharing
+information. Ours is exact and sits at the source, where it becomes part of
+the arbitration decision itself, because on this bus the dominant cost of an
+unnecessary invalidation is the global serialization it causes and not the
+remote tag lookups. A cost model of the bus protocol explains where the
+saving comes from. The filter is evaluated in terms of execution time,
+coherence correctness and FPGA resource utilization.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -89,10 +94,11 @@ waiting for coherence actions that are serialized across the whole system.
 Several hardware and software coherence schemes have been proposed for
 scalable architectures~\cite{jetty,cgct,regionscout}, and the RISC-V ecosystem
 provides coherent interconnect fabrics for large
-systems~\cite{tilelink,openpiton,cifer}. Adopting one of these means adopting
-its interconnect and, in most cases, modifying the core, and this is the
-development cost that a designer working with existing soft cores would like
-to avoid. A seamless cache extension avoids it. Kamaleldin \emph{et
+systems~\cite{tilelink,openpiton,cifer}. Adopting one of these generally means
+integrating with its coherence and interconnect infrastructure, and it may
+require changes to the core or to its memory interface. For a designer working
+with existing, already verified soft cores, that is the development cost worth
+avoiding, and a seamless cache extension avoids it. Kamaleldin \emph{et
 al.}~\cite{kamaleldin2024} attach a private, write-through Data Cache Unit
 (DCU) to an unmodified RISC-V core through the core's ordinary data port and
 keep the DCUs coherent with a snooping invalidation bus, entirely in
@@ -149,11 +155,10 @@ invalidation is granted per clock cycle in the whole system, and the grant is
 held back until every other cache is ready to accept it. For this reason we
 place the filter at the source of the request, where it can decide whether to
 arbitrate at all, and because the caches are small we can afford an exact copy
-of their tag arrays. Coherent RISC-V fabrics such as TileLink~\cite{tilelink},
-OpenPiton~\cite{openpiton} and CIFER~\cite{cifer} are complete memory systems.
-The design studied here is an extension attached to an unmodified core
-through its existing memory port, so its coherence traffic is confined to a
-single shared bus.
+of their tag arrays. The coherent RISC-V fabrics mentioned above are complete
+memory systems, whereas the design studied here is an extension attached to an
+unmodified core through its existing memory port, which is what confines its
+coherence traffic to a single shared bus.
 
 % =============================================================================
 \section{The Cache Extension Under Study}
@@ -310,13 +315,9 @@ already holds.
 \centering
 \includegraphics[width=\columnwidth]{fig_filter_col.pdf}
 \caption{Decision path of the snoop filter for the INV REQ selected by the
-INV REQ arbiter, issued by PE $i$ with address of $w$. The address bus reads
-every Tag-RAM mirror and valid bit at its set index; per way, a comparator
-matches the stored tag against the tag of $w$ and an AND gate qualifies it
-with the valid bit; the two ways are ORed, then ORed with the fill comparator
-of Section~\ref{sec:fill} (shaded). PE~1--3 are identical. Excluding PE $i$
-gives the sharer set $S(w)$, and a NOR over its bits decides whether the
-broadcast is suppressed.}
+arbiter, issued by PE $i$ with address of $w$. The address bus reads every
+Tag-RAM mirror and valid bit at its set index. PE~1--3 are identical to PE~0.
+The fill comparator is shaded; it is the term of Section~\ref{sec:fill}.}
 \label{fig:filter}
 \end{figure}
 
@@ -413,10 +414,10 @@ $120{,}539 \le 243{,}100 \le 326{,}373$ cycles, conv2d $5{,}185 \le 13{,}795
 In hardware, the mirror is one memory array per (PE, way) pair, addressed by
 the set index. The tags are kept outside any reset, because a tag is only
 compared when its valid bit is set, and this lets them map to distributed RAM
-(LUTRAM). The valid bits are kept in flip-flops, where they can be reset and
+(LUTRAM); the valid bits are kept in flip-flops, where they can be reset and
 read for all arrays at once. Our first implementation held both under an
-asynchronous reset, and Vivado mapped it entirely to flip-flops, 11{,}776 of
-them plus 3{,}202 LUTs, against 512 and 408 for the structure described here.
+asynchronous reset, and Vivado mapped it entirely to flip-flops: 11{,}776 of
+them and 3{,}202 LUTs, against 512 and 408 here.
 
 % =============================================================================
 \section{Evaluation and Performance Analysis}
@@ -520,7 +521,7 @@ The four benchmark kernels never exercise the case in which the filter has to
 let a broadcast through, so they cannot show that it is safe. Our coherence
 testbench does. It runs a producer/consumer exchange and a randomized
 four-core stress test over a small shared window, so that half of its
-INV REQs are useful, and with the filter enabled it passes 3{,}112 checks.
+INV REQs are useful, and with the filter it passes 3{,}112 checks.
 Among them is a version-monotonicity check: a core that has observed version
 $k$ of a location must never afterwards observe an older version, which is
 the symptom of a lost invalidation. The filter suppressed 282 of 921
@@ -565,9 +566,9 @@ $1.11\times$ at a memory latency of twenty.
 
 On the benchmark kernels of its own evaluation, the seamless cache extension
 we reproduced spends 6\,\% to 33\,\% of each core's cache busy time on
-invalidation requests that invalidate nothing. An exact snoop filter, a
-mirror of the tag and valid bits of all DCUs that also covers lines being
-fetched, removes this traffic for 1{,}064 LUTs and is worth $1.122\times$.
+invalidation requests that invalidate nothing. An exact mirror of the tag and
+valid bits of all DCUs, covering the lines being fetched as well, lets the bus
+suppress this traffic for 1{,}064 LUTs and is worth $1.122\times$.
 
 \ifanon
 \else
