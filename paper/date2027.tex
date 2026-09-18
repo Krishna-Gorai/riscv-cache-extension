@@ -60,8 +60,8 @@ evaluation the answer is none. The kernels partition their data between the
 processing elements, so every written line is private to the core that writes
 it, and yet each write is still arbitrated across the whole system and
 acknowledged by every other cache. A considerable fraction of each core's
-execution time is spent in this way, and for a streaming kernel the overhead
-is larger than the benefit of the cache. We propose a snoop filter that keeps
+cache busy time is spent waiting for the snoopy bus in this way, and for a
+streaming kernel the overhead is larger than the benefit of the cache. We propose a snoop filter that keeps
 a copy of the tag and valid bits of every data cache unit inside the snoopy
 bus, so that the bus can suppress an invalidation request when no other cache
 holds the addressed line or is fetching it. A cost model of the bus protocol
@@ -101,8 +101,8 @@ hardware.
 In this work we reproduce the cache extension of~\cite{kamaleldin2024} at the
 register-transfer level in order to find out how much of the coherence traffic
 it generates is really necessary. We find that between 6\,\% and 33\,\% of
-the time a core spends in its cache goes to waiting for the snoopy bus, and
-that over four benchmark kernels the system issues 1{,}048{,}821 invalidation
+the time a core spends with an access in its cache goes to waiting for the
+snoopy bus, and that over four benchmark kernels the system issues 1{,}048{,}821 invalidation
 requests, not one of which invalidates a cache line in another DCU. The
 kernels partition their arrays between the Processing Elements (PEs), so
 almost every written line is private to one PE, but the bus has no way of
@@ -258,9 +258,11 @@ find a valid matching line to clear.
 
 \subsection{Time Spent Waiting for the Snoopy Bus}
 
-We express the snoop-stall cycles of a DCU as a fraction of its busy cycles,
-that is, as the share of a core's cache time that goes to waiting for the
-bus. At a memory latency of two cycles this share is 14.3\,\% on memcpy,
+We express the snoop-stall cycles of a DCU as a fraction of its busy cycles.
+We call this the cache busy time of the core: it is the time the core spends
+with an access in its DCU, and not its total execution time, which also
+includes everything the core does without touching the cache. At a memory
+latency of two cycles this share is 14.3\,\% on memcpy,
 15.8\,\% on matmul, 6.5\,\% on conv2d and 5.8\,\% on FFT. At a memory latency
 of twenty it rises to 33.0\,\%, 32.9\,\%, 19.0\,\% and 12.2\,\%,
 respectively. The share grows with the memory latency because each grant is
@@ -562,7 +564,7 @@ $1.11\times$ at a memory latency of twenty.
 % =============================================================================
 
 On the benchmark kernels of its own evaluation, the seamless cache extension
-we reproduced spends 6\,\% to 33\,\% of each core's cache time on
+we reproduced spends 6\,\% to 33\,\% of each core's cache busy time on
 invalidation requests that invalidate nothing. An exact snoop filter, a
 mirror of the tag and valid bits of all DCUs that also covers lines being
 fetched, removes this traffic for 1{,}064 LUTs and is worth $1.122\times$.
