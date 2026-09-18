@@ -87,3 +87,4 @@ sim/*/
 *.log.err
 paper/*.bbl
 paper/*.blg
+fpga/filter_ooc_util.txt

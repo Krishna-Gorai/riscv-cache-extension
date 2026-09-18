@@ -1,0 +1,27 @@
+# Unbounded proof of the snoop filter's safety property by property-directed
+# reachability. See filter_fv.sv for what is proved and why the geometry is
+# reduced. memory_map turns the eight small tag/valid arrays into flip-flops,
+# without which the solver spends its time on array theory instead of on the
+# property.
+[options]
+mode prove
+depth 20
+
+[engines]
+abc pdr
+
+[script]
+plugin -i slang
+read_slang --top filter_fv snoop_filter.sv filter_fv.sv
+prep -top filter_fv -flatten
+
+[files]
+rtl/snoop/snoop_filter.sv
+fv/filter_fv.sv
+
+# Note on engines: property-directed reachability (abc pdr) discharges this in
+# a few minutes. Bounded model checking, whether through smtbmc or abc bmc3,
+# does not get past a handful of cycles on the same design in the same time --
+# the eight small arrays make the unrolled formula much worse than the
+# inductive one. Since pdr proves the property outright, there is nothing a
+# bounded check would add.

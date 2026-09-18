@@ -64,7 +64,7 @@ module filter_sva #(
         assign dcu_t[c][s][w] =
           tb_coherent_subsystem.dut.g_dcu[c].u_dcu.u_tag_ram.mem[s][w*TagW +: TagW];
         assign mir_v[c][s][w] =
-          tb_coherent_subsystem.dut.u_snoopy_bus.g_filter.u_filter.valid_q[c][s][w];
+          tb_coherent_subsystem.dut.u_snoopy_bus.g_filter.u_filter.g_core[c].g_way[w].valid_mem[s];
         assign mir_t[c][s][w] =
           tb_coherent_subsystem.dut.u_snoopy_bus.g_filter.u_filter.g_core[c].g_way[w].tag_mem[s];
       end

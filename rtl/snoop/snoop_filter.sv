@@ -84,12 +84,9 @@ module snoop_filter #(
   assign qry_set = qry_addr_i[OffsW +: IdxW];
   assign qry_tag = qry_addr_i[AddrW-1 -: TagW];
 
-  // Valid bits: flip-flops, because they need a reset and are read eight at a
-  // time. 512 bits at the paper's geometry.
-  logic valid_q [NumCores][NumSets][NumWays];
-
   logic [TagW-1:0] tag_rd [NumCores][NumWays];
-  logic            way_hit[NumCores][NumWays];
+  logic            valid_rd[NumCores][NumWays];
+  logic            way_hit [NumCores][NumWays];
 
   for (genvar c = 0; c < NumCores; c++) begin : g_core
     for (genvar w = 0; w < NumWays; w++) begin : g_way
@@ -112,16 +109,34 @@ module snoop_filter #(
 
       assign tag_rd[c][w] = tag_mem[qry_set];
 
+      // Valid bits: flip-flops, because they need a reset and are read eight at
+      // a time; 512 bits at the paper's geometry. One array per (core, way),
+      // like the tags above, so that each array has a single writer. A single
+      // three-dimensional array written from all eight generate blocks is the
+      // same hardware, but no tool can see that the eight blocks touch disjoint
+      // slices of it, which makes the design impossible to analyse formally and
+      // is why fv/filter_fv.sv could not be run against the first version.
+      logic valid_mem [NumSets];
+
       always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
-          for (int unsigned s = 0; s < NumSets; s++) valid_q[c][s][w] <= 1'b0;
+          for (int unsigned s = 0; s < NumSets; s++) valid_mem[s] <= 1'b0;
         end else if (upd_here) begin
-          valid_q[c][upd_set_i[c*IdxW +: IdxW]][w] <= upd_inst_i[c];
+          valid_mem[upd_set_i[c*IdxW +: IdxW]] <= upd_inst_i[c];
         end
       end
 
-      assign way_hit[c][w] = valid_q[c][qry_set][w] &&
-                             (tag_rd[c][w] == qry_tag);
+      assign valid_rd[c][w] = valid_mem[qry_set];
+
+`ifdef FV_MUTANT_WAY
+      // A deliberate fault, used only to check that the proof of
+      // fv/filter_fv.sv is not vacuous: way 1 is never reported, so a line
+      // held there is missed and the bus would suppress an invalidation that
+      // was needed. Never define this in a real build.
+      assign way_hit[c][w] = (w == 0) && valid_rd[c][w] && (tag_rd[c][w] == qry_tag);
+`else
+      assign way_hit[c][w] = valid_rd[c][w] && (tag_rd[c][w] == qry_tag);
+`endif
     end
   end
 

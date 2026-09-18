@@ -1,0 +1,7 @@
+"Sets","AddrW","TagW","Status","Seconds"
+"2","9","4","PROVED","2.5"
+"4","12","6","TOOL ERROR","2.1"
+"8","16","9","TOOL ERROR","2.3"
+"16","20","12","TOOL ERROR","2.8"
+"32","26","17","PROVED","180.4"
+"64","32","22","TOOL ERROR","4.4"

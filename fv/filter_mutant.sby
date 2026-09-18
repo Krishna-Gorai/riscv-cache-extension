@@ -1,0 +1,20 @@
+# The same proof against a deliberately broken filter (way 1 never reported),
+# to show that the property is not vacuous. This one must FAIL. See filter_fv.sv for what is proved and why the geometry is
+# reduced. memory_map turns the eight small tag/valid arrays into flip-flops,
+# without which the solver spends its time on array theory instead of on the
+# property.
+[options]
+mode prove
+depth 20
+
+[engines]
+abc pdr
+
+[script]
+plugin -i slang
+read_slang -DFV_MUTANT_WAY --top filter_fv snoop_filter.sv filter_fv.sv
+prep -top filter_fv -flatten
+
+[files]
+rtl/snoop/snoop_filter.sv
+fv/filter_fv.sv
