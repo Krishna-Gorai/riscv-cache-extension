@@ -1,0 +1,30 @@
+%% The sharing workload, added 2026-09-18 on the reviewer's request: the four
+%% benchmark kernels are data-parallel, so the "no useful invalidations"
+%% result needs a counterpart on a kernel that really does share.
+%%
+%% Numbers from the halo-exchange stencil (32x32, 8 steps), same RTL and same
+%% harness as the other kernels; see docs/directed-invalidation.md for the run
+%% record, which also carries the directed-invalidation column used in
+%% Section VII. "Delivered" counts invalidations received by a DCU, so the
+%% unfiltered figure is roughly three times the number granted.
+\begin{table}[t]
+\caption{The halo-exchange stencil, a kernel with real sharing. Cycles of the
+slowest PE; deliveries and useful deliveries over the whole run.}
+\label{tab:stencil}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Memory  & \multicolumn{2}{c}{Execution cycles} & & \multicolumn{2}{c}{INV REQs delivered} \\
+\cmidrule(lr){2-3}\cmidrule(l){5-6}
+latency & No filter & Filter & Gain & No filter & Filter \\
+\midrule
+2  & 65{,}587 & 64{,}622 & $1.015\times$ & 27{,}690 & 504 \\
+8  & 70{,}826 & 67{,}526 & $1.049\times$ & 27{,}690 & 504 \\
+20 & 83{,}191 & 74{,}713 & $1.113\times$ & 27{,}690 & 528 \\
+\midrule
+\multicolumn{6}{@{}l@{}}{\emph{of which useful:} 168 in every configuration} \\
+\bottomrule
+\end{tabular}
+\end{table}

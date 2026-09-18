@@ -52,7 +52,7 @@
 
 % ------------------------------------------------------------ processing elements
 % x0 = left edge of the PE's components; PE frame runs from x0-2 to x0+39.
-\foreach \i/\xo in {0/2, 1/47, 2/92, 3/137} {
+\foreach \i/\xo in {0/2} {
   % frame and name
   \node[pe,minimum width=42.5mm,minimum height=48.5mm,anchor=north west]
         (pe\i) at (\xo-2, 2) {};
@@ -87,6 +87,25 @@
   \draw[mir] (\xo+30, 0) -- (\xo+30, 10); \node[dot] at (\xo+30, 10) {};
 }
 
+% ------------------------------------------- PE 1-3, collapsed and narrow, so
+% that the eye is not asked to read the same five boxes four times and the
+% shaded filter stays the dominant new element.
+\foreach \i/\xo in {1/47, 2/75, 3/103} {
+  \node[pe,minimum width=25mm,minimum height=48.5mm,anchor=north west]
+        (pe\i) at (\xo-2, 2) {};
+  \node[font=\scriptsize\bfseries,anchor=west,inner sep=1pt] at (\xo-1, -45.3) {PE \i};
+  \node[dcu,minimum width=17mm,minimum height=8mm,anchor=north west] (d\i) at (\xo+2, 0)
+    {DCU\\[-1pt] {\tiny as PE 0}};
+  \node[blk,minimum width=17mm,minimum height=14mm,anchor=north west] (c\i) at (\xo+2, -22)
+    {CV32E40P core,\\[-1pt] Data-Bridge,\\[-1pt] Instr.-Bridge,\\[-1pt] ITCM\\[-1pt]
+     {\tiny wired as PE 0}};
+  \draw[bi] (\xo+6, -8) -- (\xo+6, -22);
+  \draw[bi] (\xo+15, -36) -- (\xo+15, -52.5);
+  \draw[bi] (\xo+19, -4) -- (\xo+21, -4) -- (\xo+21, -52.5);
+  \draw[tap] (\xo+5, 0) -- (\xo+5, 10);   \node[dot] at (\xo+5, 10) {};
+  \draw[mir] (\xo+16, 0) -- (\xo+16, 10); \node[dot] at (\xo+16, 10) {};
+}
+
 % labels, written once on PE 0 (every PE is wired identically)
 \node[lab,anchor=west] at (13.5, -16.5) {READ REQ, WRITE REQ $\downarrow$\\RESP $\uparrow$};
 \node[lab,anchor=west] at (13, -25.5) {D-port};
@@ -101,38 +120,37 @@
   {tag + valid update $\uparrow$\\fill in flight $\uparrow$};
 
 % ------------------------------------------------------------------ snoopy bus
-\node[pe,minimum width=182mm,minimum height=17.5mm,anchor=south west] at (-1, 9.5) {};
+\node[pe,minimum width=128mm,minimum height=17.5mm,anchor=south west] at (-1, 9.5) {};
 \node[font=\scriptsize\bfseries,anchor=west,inner sep=1pt] at (0.5, 25.3) {Snoopy bus};
-\draw[bus] (-1, 10) -- (181, 10);
+\draw[bus] (-1, 10) -- (127, 10);
 
 \node[new,minimum width=48mm,anchor=south west] (filt) at (2, 14)
   {\textbf{Snoop filter (this work)}\\[-1pt]
    {\tiny mirror of the Status-RAM and Tag-RAM of every DCU}\\[-2pt]
    {\tiny $\cup$ fill-in-flight lines\ \ $\Rightarrow$\ \ sharer set $S(w)$}};
-\node[unit,minimum width=28mm,anchor=south west] (arb1) at (58, 14)  {INV REQ arbiter\\(RR)};
-\node[unit,minimum width=26mm,anchor=south west] (itab) at (94, 14)  {Invalidation\\Table};
-\node[unit,minimum width=28mm,anchor=south west] (arb2) at (128, 14) {LR REQ arbiter\\(RR)};
-\node[unit,minimum width=16mm,anchor=south west] (lreg) at (162, 14) {Link\\Register};
+\node[unit,minimum width=24mm,anchor=south west] (arb1) at (56, 14)  {INV REQ arbiter\\(RR)};
+\node[unit,minimum width=20mm,anchor=south west] (itab) at (84, 14)  {Invalidation\\Table};
+\node[unit,minimum width=26mm,anchor=south west] (arb2) at (100, 14) {LR REQ arbiter (RR)\\[-1pt] and Link Register};
+
 
 % stubs from the bus line to each component
-\foreach \x in {20, 66, 107, 150, 172} {
+\foreach \x in {20, 62, 92, 114} {
   \draw[bi] (\x, 10) -- (\x, 14); \node[dot] at (\x, 10) {};
 }
 % only adjacent components are joined, so nothing crosses
-\draw[ln] (50, 18) -- (58, 18);
-\node[lab] at (54, 24.2) {$S(w)=\emptyset$: suppress};
-\draw[bi] (86, 18) -- (94, 18);
-\node[lab] at (90, 24.2) {pending INV REQs};
-\draw[bi] (156, 18) -- (162, 18);
-\node[lab] at (159, 24.2) {LR address};
+\draw[ln] (50, 18) -- (56, 18);
+\node[lab] at (53, 24.2) {$S(w)=\emptyset$: suppress};
+\draw[bi] (80, 18) -- (84, 18);
+\node[lab] at (82, 24.2) {pending INV REQs};
+
 
 % ------------------------------------------------------- crossbar and memories
-\node[box,fill=black!5,minimum width=182mm,minimum height=7mm,anchor=north west]
+\node[box,fill=black!5,minimum width=128mm,minimum height=7mm,anchor=north west]
   (xbar) at (-1, -52.5) {AXI4 crossbar};
-\node[mem,anchor=north] (sdm) at (45, -63)  {Shared data memory (coherent)};
-\node[mem,anchor=north] (sim) at (135, -63) {Shared instruction memory (boot memory)};
-\draw[bi] (45, -59.5) -- (45, -63);
-\draw[bi] (135, -59.5) -- (135, -63);
+\node[mem,minimum width=48mm,anchor=north] (sdm) at (32, -63)  {Shared data memory (coherent)};
+\node[mem,minimum width=56mm,anchor=north] (sim) at (95, -63) {Shared instruction memory (boot)};
+\draw[bi] (32, -59.5) -- (32, -63);
+\draw[bi] (95, -59.5) -- (95, -63);
 
 \end{tikzpicture}
 \end{document}

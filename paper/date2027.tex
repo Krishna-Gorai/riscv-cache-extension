@@ -194,7 +194,7 @@ and that is what confines its coherence traffic to a single shared bus.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=\textwidth]{fig_arch.pdf}
+\includegraphics[width=0.74\textwidth]{fig_arch.pdf}
 \caption{Overview of the multi-core RISC-V architecture with the cache
 extension of~\cite{kamaleldin2024} and the snoop filter added by this work
 (shaded, with its mirror update port per DCU dashed). Every PE is wired as
@@ -312,7 +312,8 @@ respectively. The share grows with the memory latency because each grant is
 held for longer, as will be shown in Section~\ref{sec:model}. One might
 suspect the READ REQs that the Invalidation Table withholds under the MRSW
 invariant. We counted them, and across all four kernels not a single
-READ REQ is withheld, so the waiting must be due to the INV REQs alone.
+READ REQ is withheld. For these workloads the measured waiting is therefore
+attributable to the INV REQs.
 
 \subsection{None of the Invalidation Requests Are Necessary}
 
@@ -323,9 +324,19 @@ INV REQ broadcasts on matmul, 139{,}182 on conv2d, 61{,}683 on FFT and
 24{,}618 on memcpy, more than a million in total, and on all four kernels the
 number of useful ones is zero. To make sure the counter itself works, we ran
 it on our coherence testbench of Section~\ref{sec:eval}, which shares data on
-purpose; there it reports 345 useful INV REQs out of 921. The zeros are thus
-a property of the kernels. They are data-parallel and partition their arrays
-between the PEs, so practically every written line belongs to one PE only.
+purpose; there it reports 345 useful INV REQs out of 921.
+
+The zeros are thus a property of the kernels as much as of the design, and we
+want to be plain about it. These four kernels are data-parallel and partition
+their arrays between the PEs, so practically every written line belongs to one
+PE only, and a reader is entitled to ask whether the result survives once the
+data really is shared. It does, and for a reason that the zeros make easy to
+miss: what the filter removes is not sharing but the announcement of writes to
+caches that do not hold the line, and a workload can share a great deal and
+still make almost all of those announcements pointless. We therefore added a
+fifth kernel in which the PEs exchange data every step, and report it
+separately in Section~\ref{sec:shared}. It is also the kernel we use in
+Section~\ref{sec:rejected} to measure directed invalidation.
 
 % =============================================================================
 \section{Proposed Snoop Filter}
@@ -553,10 +564,36 @@ against the roughly 50\,\% reported there. A streaming kernel reuses no data,
 so when there is little memory latency to hide, only the coherence overhead
 is left.
 
+\subsection{A Workload That Does Share Data}
+\label{sec:shared}
+
+\input{tab_stencil}
+
+The four kernels above never make the filter let a broadcast through, so on
+their own they cannot answer what happens when the data is genuinely shared.
+For that we use a fifth kernel, a five-point Jacobi stencil on a
+$32\times32$ grid over eight time steps. Each PE owns a band of rows and
+exchanges its two boundary rows with its neighbours at every step, so the
+sharing is real, it is periodic, and the sharer set of a boundary write is
+exactly one of the other three PEs.
+
+Table~\ref{tab:stencil} gives the result. The unfiltered system delivers
+27{,}690 invalidations over the run, of which 168 are useful: sharing this
+regular still leaves 99.4\,\% of the announcements pointless, which is the
+point the four private-data kernels state in their extreme form. The filter
+delivers 504 of them and keeps all 168 useful ones, a 55-fold reduction in
+traffic, and it is worth $1.015\times$ at a memory latency of two,
+$1.049\times$ at eight and $1.113\times$ at twenty. The gain is smaller than
+on the private-data kernels, as the cost model requires: writes to a boundary
+row have a non-empty sharer set, so both terms of (\ref{eq:cost}) survive for
+them and only the interior of each band is suppressed. What the stencil shows
+is that the benefit degrades gracefully with the amount of real sharing
+rather than disappearing at the first shared line.
+
 \subsection{Coherence Verification}
 
-The four benchmark kernels never exercise the case in which the filter has to
-let a broadcast through, so they cannot show that it is safe. Our coherence
+The four data-parallel kernels never make the filter let a broadcast through,
+so on their own they cannot show that it is safe. Our coherence
 testbench does. It runs a producer/consumer exchange and a randomized
 four-core stress test over a small shared window, so that half of its
 INV REQs are useful, and with the filter it passes 3{,}112 checks.
@@ -588,14 +625,24 @@ timing, on a path that is 86\,\% routing delay, so we evaluate at 60\,MHz.
 
 Since the mirror knows not only \emph{whether} another DCU holds the line but
 also \emph{which} ones do, the bus could deliver the INV REQ only to the
-members of $S(w)$ and wait only for those. We tried this on a stencil kernel
-in which each PE updates a band of rows and exchanges the boundary rows with
-its neighbours. It delivers 168 INV REQs, all of them useful, but the
-execution time improves by only 0.1\,\% to 0.3\,\%. Once suppression has
-removed every WRITE REQ with an empty sharer set, whatever cost is left in
-(\ref{eq:cost}) belongs to writes that some other DCU has to be told about.
-Even on this kernel, which does share data, suppression alone is worth
-$1.11\times$ at a memory latency of twenty.
+members of $S(w)$ and wait only for those. Only an exact filter may do this:
+under multicast a missing sharer bit drops an invalidation that was needed,
+whereas under suppression it would only have cost a redundant broadcast.
+
+We measured it on the stencil kernel of Section~\ref{sec:shared}, whose
+sharer sets make it the best case for steering. The mechanism does what it
+was built to do: it delivers 168 invalidations, every one of them useful,
+against the filter's 504, and it reduces the residual snoop stall by up to a
+factor of eleven. The execution time improves by 0.1\,\% to 0.3\,\%. The
+reason is visible in (\ref{eq:cost}): once suppression has removed every
+WRITE REQ with an empty sharer set, what is left belongs to writes that some
+other DCU genuinely has to be told about, and for those the writer has to
+wait whether the broadcast is steered or not. Removing all of the filtered
+design's remaining snoop stall would be worth at most 3.4\,\% at a memory
+latency of twenty, and directed invalidation collects a small fraction of
+that. We report it because the question "why not just multicast?" is the
+obvious one to ask of an exact filter, and the answer turns out to be that
+exactness is worth having for suppression, not for steering.
 
 % =============================================================================
 \section{Conclusion}
